@@ -47,7 +47,7 @@ abx_hcp <- TIMCI_SPA_hcpi[,309:365]
 
 ```
 
--   Which factors do you consider as important when deciding to prescribe an antibiotic?
+-   Which factors do you consider as important when deciding to prescribe an antibiotic? 
 
 ```{r}
 #b 
