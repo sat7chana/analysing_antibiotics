@@ -1,4 +1,7 @@
 # analysing_antibiotics
+
+A selection of R generated graphs showcasing insights from previous data analysis. 
+
 ![Screenshot 2025-07-03 223035](https://github.com/user-attachments/assets/2cbadeff-5173-44d9-bcae-63f5818464a3)
 
 
