@@ -1,0 +1,964 @@
+---
+title: "Analysing the appropriateness of antibiotic prescribing for children attending primary healthcare facilities equipped with digital support tools"
+format: html
+editor: visual
+---
+
+## Antibiotic Analysis
+
+[***Describe patterns in antibiotic prescribing and analyse their appropriateness via assessment of available clinical data***]{.underline}
+
+------------------------------------------------------------------------
+
+```{r}
+
+#install.packages("pacman", repos='https://cloud.r-project.org')
+
+
+#pacman::p_load(here, rio, pacman, renv, remotes, tidyverse, linelist, naniar, janitor, gtsummary, rstatix, broom, lmtest, easystats, RColorBrewer,kableExtra,dplyr,knitr,ggplot2,vctrs)
+
+library(here)
+library(rio)
+library(renv)
+library(remotes)
+library(tidyverse)
+library(linelist)
+library(naniar)
+library(janitor)
+library(gtsummary)
+library(rstatix)
+library(broom)
+library(lmtest)
+library(easystats)
+library(RColorBrewer)
+library(kableExtra)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(vctrs)
+library(readxl)
+
+
+#file location 
+# file_name <- read_excel ("C:")
+
+data_ABCDE <- file_name
+View(data_ABCDE) 
+
+
+```
+
+1.  Describe antibiotic use - In accordance to the WHO/ International Network of Rational Use of Drugs (INRUD) core prescribing indicators help evaluate the antibiotic utilisation patterns in the facilities. This includes:
+
+    -   Proportion of antibiotics prescribed
+
+        -   free text cleaning 1st step
+
+```{r}
+
+#### analyse in free text 
+
+# new column to show the free text diagnosis. 
+ # change nan/ alternative to NA 
+data_ABCDE$abx_maybe<-data_ABCDE$rx_misc_oth
+data_ABCDE$abx_maybe[data_ABCDE$abx_maybe == "nan"]<- NA
+
+# show a list of all the free text
+table(data_ABCDE$abx_maybe)
+
+# once an antibiotic has been identified need to recode to add that "text" into a new column abx_free with the associated abx code  
+
+# go through all the free text responses, categorise into groups in an excel file.which are definitely antibiotics/ not and ones that need to be double checked  
+
+# assign the free text a code 
+
+data_ABCDE <- data_ABCDE %>%
+  dplyr::mutate(
+    abx_free = dplyr::recode(abx_maybe, 
+                             "Ampiclox syrup- BBE soln" = 551,
+                             "Ampiclox syrup- panadol syrup"=551, 
+                             "Ampiclox syrup 5m- Metrodizole 5m" =551,
+                             "Ampliclox"=551,
+                             "Neo natal Ampiclox"=551,
+                             "Syrup  ampriclox"=551,
+                             "Syrup ampliclox"=551, 
+                             "Cephalexin"=552, 
+                             "Cephalexin and chrolopheramine"=552, 
+                             "Cephalexine"=552, 
+                             "Cephalixin syrup"=552, 
+                             "Cephalixin syrup and paracetamol  syrup"=552,
+                             "Potassium Permanganate solution -Cephalexin suspension"=552))
+
+
+
+```
+
+-   free text cleaning 2nd step:
+
+```{r}
+## verify all the free text has been assigned to the correct code
+table(data_ABCDE$abx_free)
+
+## all of the coded free text now is being assigned to the relevent variable
+
+    # checked using the code e.g. sum(data_ABCDE$rx_amoxicillin==1,na.rm=TRUE) to see if it has added to the existing variable sum 
+
+## add the free text codes to to existing antibiotic variables e.g. all the free text assigned to 558 as it indicates amoxicillin is now changed to 1 in the amoxicillin variable 
+data_ABCDE$rx_amoxicillin[data_ABCDE$abx_free==558] <-1
+data_ABCDE$rx_ceftriaxone[data_ABCDE$abx_free==553] <-1
+data_ABCDE$rx_ciprofloxacin[data_ABCDE$abx_free==554] <-1
+data_ABCDE$rx_gentamicin[data_ABCDE$abx_free==556] <-1
+data_ABCDE$rx_penicillinG[data_ABCDE$abx_free==557] <-1
+data_ABCDE$rx_cotrimoxazole[data_ABCDE$abx_free==550] <-1
+
+## add to others variable 
+data_ABCDE$rx_antibio_oth[data_ABCDE$abx_free==551] <-551
+data_ABCDE$rx_antibio_oth[data_ABCDE$abx_free==552] <-552
+data_ABCDE$rx_antibio_oth[data_ABCDE$abx_free==555] <-64
+data_ABCDE$rx_antibio_oth[data_ABCDE$abx_free==559] <-70
+
+## need to check if there is already anything in rx_antibio_oth
+```
+
+-   \% Consultations with free text
+
+```{r}
+## no. of consultations with abx free text
+sum(!is.na(data_ABCDE$abx_free))
+## percentage of consultations with free text 
+(sum(!is.na(data_ABCDE$abx_free)))/(sum(is.na(data_ABCDE$abx_maybe)))*100
+```
+
+-   yes (1) or no (0) if antibiotic prescribed
+
+```{r}
+
+#### recoding antibioitics as 1 and 0 
+
+
+# remove non antibiotics from rx_antibio_oth vairiable (inc.84(chloramphenical topical),73 (tetracycline topical)) all coded as 0, as not certain if 96 are antibiotics either 
+
+# variable for 1 if abx and 0 if not an abx - need to check the codes from the codebook if there are any new ones 
+data_ABCDE <- data_ABCDE %>%
+  dplyr::mutate(clean_abx_oth = dplyr::recode(rx_antibio_oth, `12` = 1, `70` = 1, `81` = 1,`80` = 1, `84` = 1, `64` = 1,`87` = 1,`63` = 1,`74` = 0,`71` = 1,`38` = 1,`39` = 1,`85` = 1,`15` = 1,`83` = 0,`108` = 1,`67` = 1,`111` = 1,`107` = 0,`86` = 0,`109` = 0,`551` = 1,`552` = 1, `96` = 0 ))
+table(data_ABCDE$clean_abx_oth)
+
+              
+# new variable to code if 1(yes)  or 0(no)  abx prescribed  
+ data_ABCDE <- data_ABCDE %>%
+   mutate(abx_pres = case_when((rx_amoxicillin == 1 | rx_penicillinG == 1 |rx_ceftriaxone==1|rx_ciprofloxacin==1|rx_gentamicin==1|
+  rx_metronidazol==1|rx_ampicillin==1|rx_azithromycin==1|rx_benzathinepeniG==1|rx_aclav==1|rx_cotrimoxazole==1|clean_abx_oth==1) ==TRUE     ~1,
+  (rx_amoxicillin == 0 & rx_penicillinG == 0 & rx_ceftriaxone==0&rx_ciprofloxacin==0&rx_gentamicin==0& rx_metronidazol==0&rx_ampicillin==0&rx_azithromycin==0&rx_benzathinepeniG==0&rx_aclav==0&rx_cotrimoxazole==0)      ~0))
+ 
+# now have clean_abx_oth to show only abx 
+# abx_pres shows if an individial has been prescribed an abx or not including free text and other abx 
+```
+
+\*Overall: In \_\_\_\_% of consultations, antibiotics are prescribed
+
+```{r}
+
+# total number of consultations with antibiotics prescribed 
+    abx_total <-  sum(data_ABCDE$abx_pres==1,na.rm=TRUE)
+    abx_total
+
+# total number of consultations with drugs prescribed 
+    pres_total <- sum(data_ABCDE$rx_prescribed==1,na.rm=TRUE)
+    pres_total
+
+# as a percentage 
+(abx_total/pres_total)*100
+    options(digits =4)
+```
+
+-   Proportions of specific antibiotic drugs
+
+```{r}
+###_____ need to adapt with the free text responses    
+ # table for the antibiotics (remove topical) 
+aa <- sum(data_ABCDE$rx_amoxicillin==1,na.rm=TRUE)
+ab <- sum(data_ABCDE$rx_penicillinG==1,na.rm=TRUE)
+ac <- sum(data_ABCDE$rx_ceftriaxone==1,na.rm=TRUE)
+ad <- sum(data_ABCDE$rx_ciprofloxacin==1,na.rm=TRUE)
+ae <- sum(data_ABCDE$rx_gentamicin==1,na.rm=TRUE)
+af <- sum(data_ABCDE$rx_metronidazol==1,na.rm=TRUE)
+ag <- sum(data_ABCDE$rx_ampicillin==1,na.rm=TRUE)
+ah <- sum(data_ABCDE$rx_azithromycin==1,na.rm=TRUE)
+ai <- sum(data_ABCDE$rx_benzathinepeniG==1,na.rm=TRUE)
+aj <- sum(data_ABCDE$rx_aclav==1,na.rm=TRUE)
+ak <- sum(data_ABCDE$rx_cotrimoxazole==1,na.rm=TRUE)
+al <- sum(data_ABCDE$rx_antibio_oth==12,na.rm=TRUE)
+am <- sum(data_ABCDE$rx_antibio_oth==70,na.rm=TRUE)
+an <- sum(data_ABCDE$rx_antibio_oth==81,na.rm=TRUE)
+ao <- sum(data_ABCDE$rx_antibio_oth==80,na.rm=TRUE)
+ap <- sum(data_ABCDE$rx_antibio_oth==84,na.rm=TRUE)
+aq <- sum(data_ABCDE$rx_antibio_oth==64,na.rm=TRUE)
+ar <- sum(data_ABCDE$rx_antibio_oth==87,na.rm=TRUE)
+as <- sum(data_ABCDE$rx_antibio_oth==63,na.rm=TRUE)
+at <- sum(data_ABCDE$rx_antibio_oth==71,na.rm=TRUE)
+au <- sum(data_ABCDE$rx_antibio_oth==38,na.rm=TRUE)
+av <- sum(data_ABCDE$rx_antibio_oth==39,na.rm=TRUE)
+aw <- sum(data_ABCDE$rx_antibio_oth==85,na.rm=TRUE)
+ax <- sum(data_ABCDE$rx_antibio_oth==15,na.rm=TRUE)
+ay <- sum(data_ABCDE$rx_antibio_oth==108,na.rm=TRUE)
+az <- sum(data_ABCDE$rx_antibio_oth==67,na.rm=TRUE)
+aa2 <- sum(data_ABCDE$rx_antibio_oth==111,na.rm=TRUE)
+ab2 <- sum(data_ABCDE$rx_antibio_oth==551,na.rm=TRUE)
+ac2 <- sum(data_ABCDE$rx_antibio_oth==552,na.rm=TRUE)
+
+
+df1<- data.frame(Antibiotic = c("Amoxicillin","PenicillinG","Ceftriaxone","Ciprofloxacin","Gentamicin","Metronidazol","Ampicillin","Azithromycin","BenzathinepenG","Aclav","Cotrimoxazole","Cloxacillin etc","Phenoxymethylpenicillin","Cefazolin","Amikacin","Clarithromycin","Erythromycin etc","Tinidazole","Doxycycline","Rifampicin","RH","RHZE","Clindamycin","Nitrofurantoin","Aminoside/Dabrol", "Isoniazid w/o Rifampicin", "Paromomycin/Gaberol","Ampiclox","Cefalexin"), 
+                 Prescribed = c(aa,ab,ac,ad,ae,af,ag,ah,ai,aj,ak,al,am,an, ao,ap,aq,ar, as, at,au,av,aw,ax, ay,az, aa2,ab2,ac2))
+                 
+df1$Percent= scales::percent(df1$Prescribed/sum(df1$Prescribed))
+
+################################################
+
+## table testing 
+
+print(df1)
+
+#type 1 
+
+
+#type 2 
+
+df1_des <- df1[order(df1$Prescribed, decreasing = TRUE),]
+
+df1_des %>%
+  kable(caption = "Antibiotics", format = "html", row.names = FALSE) %>%
+kable_classic(full_width = F, html_font = "Cambria")%>%
+   kable_styling(font_size = 15)
+
+
+
+
+###################################################
+#### graph test 
+
+ggplot (df1_des, aes(x=Antibiotic, y=Prescribed)) + 
+  geom_bar(stat = "identity", fill = "#f68060",alpha=.6, width=1,color = "firebrick") +
+  labs(y="Prescribed Quantity", x="Antibiotic",
+       title = "Antibiotics Prescribed in children under 5",
+       subtitle = "",
+       caption = "Data: ABCDE",
+       tag = "Fig. 1")+
+  theme(axis.title.x = element_text(vjust = 0, size = 12,face = "bold"),
+        axis.title.y = element_text(vjust = 0, size = 12,face = "bold"))+
+   theme(plot.title = element_text(lineheight = .8,size = 12, face = "bold"),
+        plot.caption = element_text(hjust = 0))+
+  geom_text(aes(label = Prescribed), vjust = 0, color = "black", position = position_nudge(y=0))+
+  theme_bw()+
+  coord_flip()
+
+
+#note look at the distribution of drugs, can group to represent better in graph
+
+
+
+
+```
+
+-   Average number of antibiotics prescribed per consultation (only for consultations where antibiotics were prescribed)
+
+```{r}
+# adding 1s in all antibiotic drug variables = total prescribed per consultation
+data_ABCDE$abx_added<-data_ABCDE$rx_amoxicillin+data_ABCDE$rx_penicillinG+data_ABCDE$rx_ceftriaxone+data_ABCDE$rx_ciprofloxacin+
+  data_ABCDE$rx_gentamicin+data_ABCDE$rx_metronidazol+data_ABCDE$rx_ampicillin+data_ABCDE$rx_azithromycin+data_ABCDE$rx_benzathinepeniG+
+  data_ABCDE$rx_aclav+data_ABCDE$rx_cotrimoxazole+data_ABCDE$clean_abx_oth
+
+```
+
+-   Tabulated: number of antibiotics prescribed per consultation
+
+```{r}
+# table to show n values for no. of abx prescribed per consultaiton and percentages 
+library(janitor)
+tabyl(data_ABCDE$abx_added)
+
+# may need to add more varaibles if the table above shows more than 5 
+
+t01 <- sum(data_ABCDE$abx_added==0, na.rm = TRUE)
+t02 <- sum(data_ABCDE$abx_added==1, na.rm = TRUE)
+t03 <- sum(data_ABCDE$abx_added==2, na.rm = TRUE)
+t04 <- sum(data_ABCDE$abx_added==3, na.rm = TRUE)
+t05 <- sum(data_ABCDE$abx_added==4, na.rm = TRUE)
+t06 <- sum(data_ABCDE$abx_added==5, na.rm = TRUE)
+
+t1 <- data.frame(No.Prescribed = c("0","1","2","3","4","5"),
+                 Count = c(t01, t02, t03, t04, t05,t06))
+                
+t1$Percent= scales::percent(t1$Count/sum(t1$Count))
+
+t1 %>%
+  kable(caption = "Antibiotics", format = "html") %>%
+kable_classic(full_width = F, html_font = "Cambria")%>%
+   kable_styling(font_size = 15)
+
+```
+
+-   Mean
+
+```{r}
+# mean number of antibiotics prescribed per cosultation (excluding non abx consultations)
+mean(data_ABCDE$abx_added[data_ABCDE$abx_added!=0], na.rm=TRUE)
+```
+
+-   Median
+
+```{r}
+
+#median
+median(data_ABCDE$abx_added[data_ABCDE$abx_added!=0], na.rm=TRUE)
+```
+
+-   Percentage of antibiotics prescribed on the essential medicines list
+
+```{r}
+#total abx prescribed 
+abxt <- sum(data_ABCDE$abx_added,na.rm=TRUE)
+
+
+########need to add the other abx once split 
+abxeml <- sum(aa + ab + ag + aj + am + ac + an + ae + ao + ah + ap + af + ad + ai + ak + aw + ax)
+
+(abxeml/abxt)*100
+```
+
+-   Stratification by class
+
+```{r}
+
+
+
+c_pen <-sum(aa+ab+ag+aj+al+am) 
+c_cep <-sum(ac+an+ac2) 
+c_ami <-sum(ae+ao)
+c_mac <-sum(ah+ap+aq)
+c_imi <-sum(af+ar)
+c_tet <-(as)
+c_rif <-sum(at+au+av)
+c_flu <-sum(ad)
+c_bet <-sum(ai)
+c_sul <-sum(ak)
+c_lin <-sum(aw)
+c_nit <-sum(ax)
+c_oth <-sum(ay+az+aa2+ab2)
+
+#table 
+df2<- data.frame(Class = c("Penicillins","Cephalosporins","Aminoglycosides","Macrolides","Imidazole","Tetracyclines","Rifamycins","Fluoroquinolones","Beta-lactam/beta-lactamase-inhibitor","Sulfonamide-trimehoprim combination","Lincosamides","Nitrofurantoin derivatives","Other"),
+                 Prescribed_Class = c(c_pen,c_cep,c_ami,c_mac,c_imi,c_tet,c_rif,c_flu,c_bet,c_sul,c_lin,c_nit,c_oth))
+
+df2$Percent= scales::percent(df2$Prescribed_Class/sum(df2$Prescribed_Class))
+
+df2 %>%
+  kable(caption = "", format = "html", row.names = FALSE) %>%
+kable_classic(full_width = F, html_font = "Cambria")%>%
+   kable_styling(font_size = 15)
+
+#graph
+
+ggplot(df2,aes(y=Class, x=Prescribed_Class))+
+  geom_bar(stat = "identity",fill ="darkorange")+
+   theme_bw()+
+   labs(y="Prescribed Quantity", x="Antibiotic",
+       title = "Antibiotics Classified",
+       subtitle = "",
+       caption = "Data: ABCDE",
+       tag = "Fig. 2")+
+   geom_text(aes(label = Prescribed_Class), vjust = 0, color = "black", position = position_nudge(y = 0))
+
+# could have a legend to specify what drugs are in the different categories 
+
+```
+
+-   table for drugs under categories - x
+
+```{r}
+
+df3<- data.frame(Antibiotic_C = c("Amoxicillin","PenicillinG", "Ampicillin", "Aclav", "Cloxacillin etc", "Phenoxymethylpenicillin", "Ampiclox", "Ceftriaxone", "Cefazolin","Cefalexin", "Gentamicin", "Amikacin", "Azithromycin", "Clarithromycin", "Erythromycin etc", "Metronidazole", "Tinidazole", "Doxycycline", "Rifampicin", "RH", "RHZE","Ciprofloxacin", "BenzathinepenG", "Cotrimoxazole", "Clindamycin", "Nitrofurantoin", "Aminoside/Dabrol", "Isoniazid w/o Rifampicin", "Paromomycin/Gaberol"))
+                 
+                 
+Percent_Pres= scales::percent(df1$Pres/sum(df1$Pres))
+
+Antibiotic_C = c("Amoxicillin","PenicillinG", "Ampicillin", "Aclav", "Cloxacillin etc", "Phenoxymethylpenicillin", "Ampiclox", "Ceftriaxone", "Cefazolin","Cefalexin", "Gentamicin", "Amikacin", "Azithromycin", "Clarithromycin", "Erythromycin etc", "Metronidazole", "Tinidazole", "Doxycycline", "Rifampicin", "RH", "RHZE","Ciprofloxacin", "BenzathinepenG", "Cotrimoxazole", "Clindamycin", "Nitrofurantoin", "Aminoside/Dabrol", "Isoniazid w/o Rifampicin", "Paromomycin/Gaberol")
+
+Pres = c(aa,ab,ag,aj,al,am,ab2,ac,an,ac2,ae,ao,ah,ap,aq,af,ar,as,at,au,av,ad,ai,ak,aw,ax,ay,az,aa2)
+
+Antibiotic_C = factor(Antibiotic_C)
+
+df3<- data.frame(Antibiotic_C, Pres, Percent_Pres)
+
+df3 %>%
+  kable(caption = "", format = "html", row.names = FALSE) %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(font_size = 15) %>%
+  pack_rows("Penicillin, N = ", 1, 7) %>%
+  pack_rows("Cephalosporins, N =", 8, 10) %>%
+  pack_rows("Aminoglycosides, N =", 11, 12) %>%
+  pack_rows("Macrolides, N =", 13, 15) %>%
+  pack_rows("Imidazole, N =", 16, 17) %>%
+  pack_rows("Tetracyclines, N =", 18, 18) %>%
+  pack_rows("Rifamycins, N =", 19, 21) %>%
+  pack_rows("Fluoroquinolones, N =", 22, 22) %>%
+  pack_rows("Beta-lactam/beta-lactamase-inhibitor, N =", 23, 23) %>%
+  pack_rows("Sulfonamide-trimehoprim combination, N =", 24, 24) %>%
+  pack_rows("Lincosamides, N =", 25, 25) %>%
+  pack_rows("Nitrofurantoin derivatives, N =", 26, 26) %>%
+  pack_rows("Other, N =", 27, 29)
+
+
+
+```
+
+-   Add in the data from dx_primary_list
+
+    ```{r}
+    ### dx_primary_list 
+
+    data_ABCDE$dx_convulsions[data_ABCDE$dx_primary_list==1] <-1
+    data_ABCDE$dx_asthma[data_ABCDE$dx_primary_list==2] <-1
+    data_ABCDE$dx_bronchiolitis[data_ABCDE$dx_primary_list==3] <-1
+    data_ABCDE$dx_wheeze[data_ABCDE$dx_primary_list==4] <-1
+    data_ABCDE$dx_URTI[data_ABCDE$dx_primary_list==5] <-1
+    data_ABCDE$dx_dysentery[data_ABCDE$dx_primary_list==6] <-1
+    data_ABCDE$dx_mastoiditis[data_ABCDE$dx_primary_list==7] <-1
+    data_ABCDE$dx_low_weight[data_ABCDE$dx_primary_list==8] <-1
+    data_ABCDE$dx_hiv[data_ABCDE$dx_primary_list==9] <-1
+    data_ABCDE$dx_tb[data_ABCDE$dx_primary_list==10] <-1
+    data_ABCDE$dx_fever[data_ABCDE$dx_primary_list==11] <-1
+    ```
+
+    -   and dx_secondary list,
+
+    ```{r}
+    ##? cough, cns danger sign, hypoxaemia, meningitis,.... need to complete
+
+    # to check values 
+        # sum(data_ABCDE$dx_secondary_list=="D031??", na.rm = TRUE)
+
+    data_ABCDE$dx_fever[data_ABCDE$dx_secondary_list=="S02"]<-1
+    data_ABCDE$dx_fever[data_ABCDE$dx_secondary_list=="D010"]<-1
+    data_ABCDE$dx_diarrhoea[data_ABCDE$dx_secondary_list=="S03"]<-1
+    data_ABCDE$dx_malnutrition[data_ABCDE$dx_secondary_list=="D001"]<-1
+    data_ABCDE$dx_malnutrition[data_ABCDE$dx_secondary_list=="D002"]<-1
+    data_ABCDE$dx_malnutrition[data_ABCDE$dx_secondary_list=="D004"]<-1
+    data_ABCDE$dx_low_weight[data_ABCDE$dx_secondary_list=="D003"]<-1
+    data_ABCDE$dx_anaemia[data_ABCDE$dx_secondary_list=="D005"]<-1
+    data_ABCDE$dx_anaemia[data_ABCDE$dx_secondary_list=="D006"]<-1
+    data_ABCDE$dx_ds[data_ABCDE$dx_secondary_list=="D007"]<-1
+
+
+    ```
+
+```{r}
+# diagnosed conditions summary,----> need to add dx_prim/sec 
+#--> note - need to group the diagnosis 
+
+# table sumarising diseases 
+
+da <- sum(data_ABCDE$dx_ds==1,na.rm=TRUE)
+db <- sum(data_ABCDE$dx_severe==1,na.rm=TRUE)
+dc <- sum(data_ABCDE$dx_pneumonia==1,na.rm=TRUE)
+dd <- sum(data_ABCDE$dx_diarrhoea==1,na.rm=TRUE)
+de <- sum(data_ABCDE$dx_dehydration==1,na.rm=TRUE)
+df <- sum(data_ABCDE$dx_malaria==1,na.rm=TRUE)
+dg <- sum(data_ABCDE$dx_ear_infection==1,na.rm=TRUE)
+dh <- sum(data_ABCDE$dx_malnutrition==1,na.rm=TRUE)
+di <- sum(data_ABCDE$dx_anaemia==1,na.rm=TRUE)
+dj <- sum(data_ABCDE$dx_croup==1,na.rm=TRUE)
+dk <- sum(data_ABCDE$dx_asthma==1,na.rm=TRUE)
+dl <- sum(data_ABCDE$dx_bronchiolitis==1,na.rm=TRUE)
+dm <- sum(data_ABCDE$dx_wheeze==1,na.rm=TRUE)
+dn <- sum(data_ABCDE$dx_URTI==1,na.rm=TRUE)
+do <- sum(data_ABCDE$dx_ARI==1,na.rm=TRUE)
+dp <- sum(data_ABCDE$dx_flu==1,na.rm=TRUE)
+dq <- sum(data_ABCDE$dx_runny_nose==1,na.rm=TRUE)
+dr <- sum(data_ABCDE$dx_dysentery==1,na.rm=TRUE)
+ds <- sum(data_ABCDE$dx_hiv==1,na.rm=TRUE)
+dt <- sum(data_ABCDE$dx_tb==1,na.rm=TRUE)
+du <- sum(data_ABCDE$dx_fever==1,na.rm=TRUE)
+dv <- sum(data_ABCDE$dx_eye_infection==1,na.rm=TRUE)
+dw <- sum(data_ABCDE$dx_conjunctivitis==1,na.rm=TRUE)
+dx <- sum(data_ABCDE$dx_skin==1,na.rm=TRUE)
+dy <- sum(data_ABCDE$dx_dermatitis==1,na.rm=TRUE)
+dz <- sum(data_ABCDE$dx_impetigo==1,na.rm=TRUE)
+daa <- sum(data_ABCDE$dx_chicken_pox==1,na.rm=TRUE)
+dab <- sum(data_ABCDE$dx_septicaemia==1,na.rm=TRUE)
+dac <- sum(data_ABCDE$dx_worms==1,na.rm=TRUE)
+
+df3<- data.frame(Disease = c("Danger Signs","Severe Disease/ Severe Ferile Disease","Pneumonia","Diarrhoea","Dehydration","Malaria","Ear Infection","Malnutrition","Anaemia","Croup","Asthma","Bronchiolitis","Wheeze","URTI","ARI","Flu","Runny Nose","Dysentery","HIV","TB","Fever","Eye Infection","Conjunctivitis","Skin","Dermatitis","Impetigo","Chicken Pox","Septicaemia","Worms"),
+                 Number= c(da,db,dc,dd,de,df,dg,dh,di,dj,dk,dl,dm,dn,do,dp,dq,dr,ds,dt,du,dv,dw,dx,dy,dz,daa,dab,dac))
+
+df3$Percent= scales::percent(df3$Number/sum(df3$Number))
+
+df3 %>%
+  kable(caption = "Diagnosis", format = "html", row.names = FALSE) %>%
+kable_classic(full_width = F, html_font = "Cambria")%>%
+   kable_styling(font_size = 15)
+
+
+ggplot (df3, aes(x = Disease, y=Number)) + 
+  geom_bar(stat = "identity", fill = "#f68060", width=1,color = "firebrick") +
+  labs(y="Frequecy Diagnosed", x="Disease",
+       title = "Diagnoses Number in children under 5",
+       subtitle = "",
+       caption = "Data: ABCDE",
+       tag = "Fig. 1")+
+  theme(axis.title.x = element_text(vjust = 0, size = 12,face = "bold"),
+        axis.title.y = element_text(vjust = 0, size = 12,face = "bold"))+
+   theme(plot.title = element_text(lineheight = .8,size = 12, face = "bold"),
+        plot.caption = element_text(hjust = 0))+
+  geom_text(aes(label = Number), vjust = 0, color = "black")+
+  theme_bw()+
+  coord_flip()
+
+
+
+```
+
+-   Antibiotic usage within BCDE diagnosis group
+
+    ```{r}
+
+    d_gen <- sum (da+db)
+    d_cou <- sum (dc+dn+do+dj+dl+dk+dm)
+    d_dia <- sum (de+dd+dr)
+    d_fev <- sum (df+du)
+    d_ear <- sum (dg)
+    d_mal <- sum (dh)
+    d_ana <- sum (di)
+    d_hiv <- sum (ds)
+    d_ski <- sum (dx+dy+dac+daa+dz)
+    d_oth <- sum (dv+dw+dp+dq+dt+dab)
+
+    df4<- data.frame(BCDE_Diagnosis = c("General/ Severe Disease", "Cough/Difficulty Breathing", "Diarrhoea", "Fever","Ear", "Acute Malnutriton","Anaemia", "HIV","Skin","Other"),
+                    Count = c(d_gen,d_cou,d_dia,d_fev,d_ear,d_mal,d_ana,d_hiv,d_ski,d_oth))
+    df4$Percent= scales::percent(df4$Count/sum(df4$Count))
+
+    print(df4)
+
+    df4 %>%
+      kable(caption = "", format = "html", row.names = FALSE) %>%
+    kable_classic(full_width = F, html_font = "Cambria")%>%
+       kable_styling(font_size = 15)
+
+
+    ```
+
+-   Number of diagnosis per consultation
+
+    ```{r}
+    # total diagnosis for the consultations 
+    # can have % to show diagnosis class too 
+    # removed: ds, severe, 
+    ## not sure to include dehydration, fever source, eye discharge 
+
+      data_ABCDE$dx_added<-data_ABCDE$dx_pneumonia+data_ABCDE$dx_diarrhoea + data_ABCDE$dx_dehydration+data_ABCDE$dx_malaria+data_ABCDE$dx_ear_infection+data_ABCDE$dx_malnutrition+data_ABCDE$dx_anaemia+data_ABCDE$dx_convulsions+data_ABCDE$dx_croup+data_ABCDE$dx_asthma+data_ABCDE$dx_bronchiolitis+data_ABCDE$dx_wheeze+data_ABCDE$dx_URTI+data_ABCDE$dx_ARI+data_ABCDE$dx_flu+data_ABCDE$dx_runny_nose+data_ABCDE$dx_dysentery+data_ABCDE$dx_hiv+data_ABCDE$dx_tb+data_ABCDE$dx_fever+data_ABCDE$dx_mastoiditis+data_ABCDE$dx_eye_infection+data_ABCDE$dx_eye_discharge+data_ABCDE$dx_conjunctivitis+data_ABCDE$dx_skin+data_ABCDE$dx_dermatitis+data_ABCDE$dx_impetigo+data_ABCDE$dx_chicken_pox+data_ABCDE$dx_septicaemia+data_ABCDE$dx_worms
+      
+
+    tabyl(data_ABCDE$dx_added)
+
+    # may need to add more fields if there are more than 6 rows present in tabyl
+
+    t11 <- sum(data_ABCDE$dx_added==0, na.rm = TRUE)
+    t12 <- sum(data_ABCDE$dx_added==1, na.rm = TRUE)
+    t13 <- sum(data_ABCDE$dx_added==2, na.rm = TRUE)
+    t14 <- sum(data_ABCDE$dx_added==3, na.rm = TRUE)
+    t15 <- sum(data_ABCDE$dx_added==4, na.rm = TRUE)
+    t16 <- sum(data_ABCDE$dx_added==5, na.rm = TRUE)
+
+
+    t2<-data.frame(Diagnosis.No=c("0","1","2","3","4","5"),
+                   Count = c(t11, t12, t13, t14, t15,t16))
+    t2$Percent=scales::percent(t2$Count/sum(t2$Count))
+
+    t2 %>%
+      kable(caption = "Freqency of Diagnosis per Consultation") %>%
+      kable_classic(full_width = F, html_font = "Cambria")%>%
+       kable_styling(font_size = 15)
+
+    ```
+
+-   Classify diagnosis via WHO ICD-11
+
+    ```{r}
+    d_res <-sum(dc+dj+dk+dl+dm+dn+dp+do+dq)
+    d_par <-sum(df+dr+ds+dt+dz+daa+dac)
+    d_end <-sum(de+dh)
+    d_sym <-sum(du+dd+dab)
+    d_vis <-sum(dv+dw)
+    d_ski <-(dy+dx)
+    d_ear <-sum(dg)
+    d_blo <-sum(di)
+    d_oth <-sum(da+db)
+
+
+    #table 
+    df5<- data.frame(Diagnosis = c("Diseases of the respiratory system","Infecious/ parasitic diseases","Endocrine, nutritional or metabolic diseases","symptoms, signs, clinical findings","Diseases of the visual system","Diseases of the skin","Diseases of the ear or mastoid process","Diseases of the blood or blood-forming organs","Other"),
+                     Count = c(d_res,d_par,d_end,d_sym,d_vis,d_ski,d_ear,d_blo,d_oth))
+
+    df5$Percent= scales::percent(df5$Count/sum(df5$Count))
+                    
+
+    df5 %>%
+      kable(caption = "WHO ICD-11 Diagnosis Classification", format = "html", row.names = FALSE) %>%
+    kable_classic(full_width = F, html_font = "Cambria")%>%
+       kable_styling(font_size = 15)
+
+
+
+    ```
+
+-   Looking at which antibiotics are most prescribed for a condition (e.g. pneumonia)
+
+```{r}
+
+# list of prescribed medicines with pneaumonia 
+    ## top 5 conditions: URTI, pneumonia, diarrhoea, malaria, fever
+    ## may be better to do drug classes ? or remove everything with 0 
+#--> might need to change to group abx to better visually represent 
+
+pa <- sum(data_ABCDE$dx_pneumonia & data_ABCDE$rx_amoxicillin==1,na.rm=TRUE)
+pb <- sum(data_ABCDE$dx_pneumonia & data_ABCDE$rx_penicillinG==1,na.rm=TRUE)
+pc <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_ceftriaxone==1,na.rm=TRUE)
+pd <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_ciprofloxacin==1,na.rm=TRUE)
+pe <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_gentamicin==1,na.rm=TRUE)
+pf <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_metronidazol==1,na.rm=TRUE)
+pg <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_ampicillin==1,na.rm=TRUE)
+ph <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_azithromycin==1,na.rm=TRUE)
+pi <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_benzathinepeniG==1,na.rm=TRUE)
+pj <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_aclav==1,na.rm=TRUE)
+pk <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_cotrimoxazole==1,na.rm=TRUE)
+pl <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==12,na.rm=TRUE)
+pm <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==70,na.rm=TRUE)
+pn <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==81,na.rm=TRUE)
+po <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==80,na.rm=TRUE)
+pp <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==84,na.rm=TRUE)
+pq <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==64,na.rm=TRUE)
+pr <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==87,na.rm=TRUE)
+ps <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==63,na.rm=TRUE)
+pt <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==71,na.rm=TRUE)
+pu <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==38,na.rm=TRUE)
+pv <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==39,na.rm=TRUE)
+pw <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==85,na.rm=TRUE)
+px <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==15,na.rm=TRUE)
+py <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==108,na.rm=TRUE)
+pz <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==67,na.rm=TRUE)
+pa2 <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==111,na.rm=TRUE)
+pb2 <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==551,na.rm=TRUE)
+pc2 <- sum(data_ABCDE$dx_pneumonia &data_ABCDE$rx_antibio_oth==552,na.rm=TRUE)
+
+## once made table then can see which data to include e.g. remove the zeros, if only a small amount of drugs can have a horizontal bar graph instead 
+ 
+df6<- data.frame(Drug= c("Amoxicillin","PenicillinG","Ceftriaxone","Ciprofloxacin","Gentamicin", "Metronidazol","Ampicillin","Azithromycin","BenzathinepenG","Aclav","Cotrimoxazole","Cloxacillin etc","Phenoxymethylpenicillin","Cefazolin","Amikacin","Clarithromycin","Erythromycin etc","Tinidazole","Doxycycline","Rifampicin","RH","RHZE","Clindamycin","Nitrofurantoin","Aminoside/Dabrol", "Isoniazid w/o Rifampicin", "Paromomycin/Gaberol","Ampiclox","Cefalexin"),
+                 Count= c(pa,pb,pc,pd,pe,pf,pg,ph,pi,pj,pk,pl,pm,pn,po,pp,pq,pr,ps,pt,pu,pv,pw,px,py,pz,pa2,pb2,pc2))
+
+df6$Percent= scales::percent(df6$Count/sum(df6$Count))
+
+print(df6)
+
+df6 %>%
+  kable(caption = "Antibiotics", format = "html", row.names = FALSE) %>%
+kable_classic(full_width = F, html_font = "Cambria")%>%
+   kable_styling(font_size = 15)
+
+
+# could make a table for the top 5 conditions: 
+      # and for top 5 drugs ? 
+```
+
+-   Assign each condition a category of indication (yes/ no maybe) for antibiotic(s) prescription (depending on the amount of 'free-text' diagnoses, this may be limited to only those pre-defined within data collection tools, or be limited to these plus the top 10 'free-text' diagnoses)
+
+```{r}
+
+# convert age to years 
+data_ABCDE$age_yr <- data_ABCDE$age_mo/12
+options(digits = 0)
+
+#categorise if each diagnosis needs an antibiotic 
+## new variable to have yes no for aby needed or not 
+## or maybe if there is some discrepency 1=yes, 2 = maybe, NA transform into 0 
+## do i need to specify only 1 abx prescribed in abx_added
+# yes: pneumonia, dysentery + fever + HIV+ve, fevee + meningitis, fever + ds/severe
+# maybe: fever 
+ data_ABCDE <- data_ABCDE %>%
+   mutate(abx_needed = case_when((dx_pneumonia == 1 | dx_dysentery ==1 & dx_fever ==1 | dx_dysentery ==1 & dx_hiv ==1 | dx_secondary_list == "D074" | dx_secondary_list =="D001"| dx_secondary_list =="D002" | dx_mastoiditis ==1 | dx_impetigo == 1 ) ==TRUE     ~"yes",
+  ( dx_fever ==1 & dx_ds ==1 | dx_fever ==1 &dx_severe ==1 |dx_dehydration ==1 & age_yr !=0 | dx_dehydration ==1 & age_yr !=1 | dx_ear_infection ==1 &  dx_ear_infection_duration ==98 | dx_ear_infection ==1 &  dx_ear_infection_duration ==2 | dx_malnutrition == 1)      ~"maybe"))
+
+# replace na values with no 
+data_ABCDE$abx_needed[is.na(data_ABCDE$abx_needed)] = "no"
+ 
+table(data_ABCDE$abx_needed)
+ 
+# new dataset to show maybe with more than 1 diagnosis 
+data_ABCDE_maybe<-subset(data_ABCDE, data_ABCDE$abx_needed=="maybe")
+View(data_ABCDE_maybe)
+table(data_ABCDE_maybe$abx_added)
+
+data_ABCDE_maybe_ana<-subset(data_ABCDE_maybe, data_ABCDE_maybe$abx_added!="0" &data_ABCDE_maybe$abx_added!="1")
+View(data_ABCDE_maybe_ana)
+
+# can manually go through the maybes 
+
+## need to go through maybe to see what needs to move into yes category e.g. abx_needed_clean 
+```
+
+-   analysis
+
+```{r}
+# abx needed + abx prescribed = 0 
+# abx needed + abx not prescribed = 1 
+# abx not needed + abx prescribed = 2 
+# abx not needed + abx not prescribed = 3 
+ 
+ data_ABCDE <- data_ABCDE %>%
+  mutate(abx_app_a = case_when(
+    (abx_needed == "yes" & abx_pres == 1) == TRUE      ~ 0,
+    (abx_needed == "yes" & abx_pres == 0)              ~ 1,
+    (abx_needed == "no" & abx_pres == 1)               ~ 2, 
+    (abx_needed == "no" & abx_pres == 0)               ~ 3  
+    ))
+ 
+df7a  <- sum(data_ABCDE$abx_app_a==0, na.rm = TRUE)
+df7b  <- sum(data_ABCDE$abx_app_a==1, na.rm = TRUE)
+df7c  <- sum(data_ABCDE$abx_app_a==2, na.rm = TRUE)
+df7d  <- sum(data_ABCDE$abx_app_a==3, na.rm = TRUE)
+
+
+df7 <- data.frame(Appropiateness = c("Antibiotic needed, Antibiotic prescribed", "Antibiotic needed, Antibiotic not prescribed", "Antibiotic not needed, Antibiotic prescribed", "Antibiotic not needed, Antibiotic not prescribed"), 
+                  Count= c(df7a, df7b, df7c, df7d))
+
+df7$Percent= scales::percent(df7$Count/sum(df7$Count))
+
+library(kableExtra)
+
+df7 %>% 
+  kable(caption = "", format = "html") %>% 
+  kable_classic(full_width = F, html_font = "Cambria") %>% 
+  kable_styling(font_size = 15)
+
+
+app1 <- matrix(c(155, 1422, 6, 514), nrow = 2)
+colnames(app1) <- c("Antibiotic Prescribed", "Antibiotic Not Prescribed")
+rownames(app1) <- c("Antibiotic Needed", "Antibiotic Not Needed")
+app1 <- as.table(app1)
+
+app1 %>% 
+  kable(caption = "", format = "html") %>% 
+  kable_classic(full_width = F, html_font = "Cambria") %>% 
+  kable_styling(font_size = 15)
+
+
+# which diagnosis for 2 
+```
+
+-   Antibiotic Appropriateness
+
+```{r}
+# from the list of antibioitcs which are aproppriate need to sort to which are correctly prescribed or not into new variable called abx_corr
+
+```
+
+[***Assess the difference between what the digital_tool proposes, and what the providers prescribe***]{.underline}
+
+This next step will include an analysis of how the data on antibiotic prescription extracted in 4.3.1 aligns with or deviates from digital_tool recommendations in terms of choice of **drug, dose, formulation, frequency of dosing and duration**. This will include a comparison of digital_tool consultation recommendations overall compared to RCT data for the sub-group of matched children (with both digital_tool consultation data and RCT data)
+
+```{r}
+digital_tool_ABCDE <- read_excel("C:/Users/chansa/Desktop/Thesis/datasets/digital_tool_research_reconciliation_satty_final_2023-03-21.xlsx")
+#View(digital_tool_ABCDE)
+
+
+# % matching, % 
+
+#  could be for the top 5 diagnosed conditions 
+  # e.g. if pneumonia diagnosis, what are we expecting to be prescribed and what is shown in the data 
+# what is the % deviation from digital_tool recommendations and what has been actually prescribed
+
+# present as table with percentages ? e.g. rx/ dx = 0/1/2 
+# gen analysis dx 
+table(digital_tool_ABCDE$agreed_dx_nb)
+table(digital_tool_ABCDE$rejected_dx_nb)
+table(digital_tool_ABCDE$additional_dx_nb)
+
+# gen analysis rx
+table(digital_tool_ABCDE$agreed_rx_nb)
+table(digital_tool_ABCDE$rejected_rx_nb)
+table(digital_tool_ABCDE$additional_rx_nb)
+
+# graph to summarise the 0,1,2 for the common dugs (top 5?)- 3 bars for each drug of 0,1,2(change NA to 99? if want to analyse)
+# Amox 
+table(digital_tool_ABCDE$`1584 22760 Amoxicillin HD PO (DT/Tablet)`)
+
+
+```
+
+[***Evaluate child, prescriber, health system and other factors associated with antibiotic prescribing***]{.underline} Subsequently, factors associated with antibiotic prescription and appropriateness will be identified. A framework will be developed before the start of the data analysis based on relevant literature and variables from the ABCDE study. Preliminary variables are indicated below and will be adapted as necessary from the developed framework. A multivariate analysis of factors will be performed and will help inform understanding of antibiotic prescribing patterns and potential reasons for deviations. This will include data on:
+
+-   Facility: type of facility, provider capacity (number, type), infrastructure (electricity, internet), diagnostic capacity, antibiotic availability, guideline availability
+
+-   Prescriber: current occupation, sex, highest level of education, years since last qualification, confidence using IT tools, use of digital_tool during consultations, when they received their last digital_tool and BCDE training, how often they use digital_tool, discussed follow up visit for child
+
+-   Child: age, sex, time from the facility, ever been hospitalized, danger signs/ severe disease, other clinical features (e.g. presenting symptoms such as fever, respirators, gastro intestinal, skin etc.)
+
+-   Caregiver: level of education, children under five in household
+
+```{r}
+
+# for each main category have a multivariate analysis
+    # can use abx_pres to see which factors may influence a child getting an abx (multiple logistic regression)
+    # can use multiple linear regression for abx_add
+    # as main focus is code 2 for abx_app can analyse which factors are morepredominant in an inappropriate antibiotic being prescribed e.g. do the analysis if abx_app = 2 
+
+data_ABCDE$ds_sev <- ifelse(data_ABCDE$dx_ds==1 | data_ABCDE$dx_severe==1,1,0)
+
+Model_1<- lm(abx_pres ~ district + type + category + age_cat + ds_sev, data = data_ABCDE)
+
+summary(Model_1)
+
+
+```
+
+-   Model is using abx_added as the dependent variable (if an antibiotic was prescribed or not.
+
+    -   the dependent variables are: district, type of facility, category (urban or rural), age category, if they had a severe diagnosis or danger sign
+
+    -   district:
+
+    -   type (health centre/disp):
+
+    -   cat (urban)
+
+    -   age cat or cont
+
+    -   ds_sev
+
+```{=html}
+<!-- -->
+```
+-   Stratify abx prescribed: district, facility type, age category
+
+-   District
+
+```{r}
+
+library(dplyr)
+
+df_district <- data_ABCDE %>%
+  group_by(district) %>%
+  summarise(n = n(),
+            yes_abx_pres = sum(abx_pres == 1, na.rm = TRUE),
+            no_abx_pres = sum(abx_pres == 0, na.rm = TRUE),
+            perc_abx_pres = round((yes_abx_pres / n) * 100, 2),
+            total_abx_added = sum(abx_added, na.rm = TRUE),
+            avg_abx = round(total_abx_added / yes_abx_pres, 4),
+            total_dx_added = sum(dx_added, na.rm = TRUE),
+            .groups = "drop")
+
+ 
+#View(df_district)
+
+## want tab to show abx pres 0 and 1, abx added, dx added, abx appropriate
+
+# Convert df_district to a matrix
+df_district_mat <- as.matrix(df_district)
+
+# Convert the matrix to a table
+df_district_tab <- as.table(df_district_mat)
+
+# transpose
+df_district_transpose = t(df_district_tab)
+ 
+colnames(df_district_transpose) = c("county1", "county2", "county3")
+rownames(df_district_transpose) = c("","N=", "Antibiotic Prescribed", "Antibiotic Not Prescribed", "Percentage", "Total Antibiotics Prescribed", "Average per Prescription","Total Disease Diagnosis")
+
+df_district_transpose %>%
+  kbl(caption = "Summary by District") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+
+```
+
+-   group by facility type
+
+```{r}
+
+df_type <- data_ABCDE %>%
+  group_by(type) %>%
+  summarise(n = n(),
+            yes_abx_pres = sum(abx_pres == 1, na.rm = TRUE),
+            no_abx_pres = sum(abx_pres == 0, na.rm = TRUE),
+            perc_abx_pres = round((yes_abx_pres / n) * 100, 2),
+            total_abx_added = sum(abx_added, na.rm = TRUE),
+            avg_abx = round(total_abx_added / yes_abx_pres, 4),
+            total_dx_added = sum(dx_added, na.rm = TRUE),
+            .groups = "drop")
+
+#View(df_district)
+
+## want tab to show abx pres 0 and 1, abx added, dx added, abx appropriate
+
+# Convert df_district to a matrix
+df_type_mat <- as.matrix(df_type)
+
+# Convert the matrix to a table
+df_type_tab <- as.table(df_type_mat)
+
+# transpose
+df_type_transpose = t(df_type_tab)
+ 
+colnames(df_type_transpose) = c("", "")
+rownames(df_type_transpose) = c("","N=", "Antibiotic Prescribed", "Antibiotic Not Prescribed", "Percentage", "Total Antibiotics Prescribed", "Average per Prescription","Total Disease Diagnosis")
+
+df_type_transpose %>%
+  kbl(caption = "Stratification by Facility Type") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+-   Stratification by age
+
+```{r}
+
+data_ABCDE <- data_ABCDE %>% 
+  mutate(
+  age_cat =dplyr:: case_when(
+    age_mo <= 11 ~ 0,
+    age_mo > 11 & age_mo <= 23 ~ 1,
+    age_mo > 23 & age_mo <= 35 ~ 2,
+    age_mo > 35 & age_mo <= 47 ~ 3,
+    age_mo > 47 & age_mo <= 59 ~ 4
+  ))
+
+df_age <- data_ABCDE %>%
+  group_by(age_cat) %>%
+  summarise(n = n(),
+            yes_abx_pres = sum(abx_pres == 1, na.rm = TRUE),
+            no_abx_pres = sum(abx_pres == 0, na.rm = TRUE),
+            perc_abx_pres = round((yes_abx_pres / n) * 100, 2),
+            total_abx_added = sum(abx_added, na.rm = TRUE),
+            avg_abx = round(total_abx_added / yes_abx_pres, 4),
+            total_dx_added = sum(dx_added, na.rm = TRUE),
+            .groups = "drop")
+
+#View(df_district)
+
+## want tab to show abx pres 0 and 1, abx added, dx added, abx appropriate
+
+# Convert df_district to a matrix
+df_age_mat <- as.matrix(df_age)
+
+# Convert the matrix to a table
+df_age_tab <- as.table(df_age_mat)
+
+# transpose
+df_age_transpose = t(df_age_tab)
+ 
+colnames(df_age_transpose) = c("", "","","","")
+rownames(df_age_transpose) = c("","N=", "Antibiotic Prescribed", "Antibiotic Not Prescribed", "Percentage", "Total Antibiotics Prescribed", "Average per Prescription","Total Disease Diagnosis")
+
+df_age_transpose %>%
+  kbl(caption = "Stratification by Age") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```

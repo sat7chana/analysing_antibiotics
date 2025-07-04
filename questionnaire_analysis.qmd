@@ -1,0 +1,483 @@
+---
+title: ""
+format: html
+editor: visual
+---
+
+[***Evaluate the perceptions and attitudes of health workers and caregivers on antibiotic prescribing***]{.underline}
+
+```{r}
+#a
+
+
+library(here)
+library(rio)
+library(renv)
+library(remotes)
+library(tidyverse)
+library(linelist)
+library(naniar)
+library(janitor)
+library(gtsummary)
+library(rstatix)
+library(broom)
+library(lmtest)
+library(easystats)
+library(RColorBrewer)
+library(kableExtra)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(vctrs)
+library(readxl)
+library(htmltools)
+
+# from the questions developed with the ABCDE team the answers need to be coded and patterns identified. then to be compared to the findings of the previous data and what the similarities and differences are 
+
+library(readr)
+ABCDE_SPA_hcpi <- read_csv("C:/Users/chansa/Desktop/Thesis/datasets/04a-ABCDE-SPA-hcpi_translated.csv")
+
+ABCDE_SPA_hcpi<-subset(ABCDE_SPA_hcpi, arm ==2)
+
+View(ABCDE_SPA_hcpi)
+
+#data for the antibiotics questions = h_a_1 to h_a_9
+abx_hcp <- ABCDE_SPA_hcpi[,309:365]
+#View(abx_hcp)
+
+```
+
+-   Which factors do you consider as important when deciding to prescribe an antibiotic?
+
+```{r}
+#b 
+
+# split grouped numberic vaules h_a_1 by spaces 
+
+ha1_split <- lapply(ABCDE_SPA_hcpi$h_a_1, function(x) unlist(strsplit(x, " ")))
+ha1_tab <- table(unlist(ha1_split))
+ha1_tab
+
+
+
+
+ha1_ <- data.frame(ha_factor = c(1,2,4,7,8,9,10,11,99),
+                      ha_count = c(ha1_tab["1"],ha1_tab["2"],ha1_tab["4"],ha1_tab["7"],ha1_tab["8"],ha1_tab["9"],ha1_tab["10"],ha1_tab["11"],ha1_tab["99"]))
+ha1_
+
+ha2_ <- data.frame(ha_factor = c("Clinical condition/ diagnosis of the child","Distance","Caregiver Factors","Paper Guidelines","Drug Availibility","Side Effects","Antibiotic Resistance","digital_tool","Other Specified"),
+                      ha_count = c(ha1_tab["1"],ha1_tab["2"],ha1_tab["4"],ha1_tab["7"],ha1_tab["8"],ha1_tab["9"],ha1_tab["10"],ha1_tab["11"],ha1_tab["99"]))
+
+ha2_$ha_count <- ifelse(is.na(ha2_$ha_count), 0, ha2_$ha_count)
+ha2_ <- ha2_[order(ha2_$ha_count, decreasing = TRUE), ]
+
+
+
+# table ------
+ha2_ %>%
+  kbl(row.names = FALSE, caption = "Which factors do you consider as important when deciding to prescribe an antibiotic? - unprompted answers") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+# free text - other ´99´ - factors considered important when prescribing antibioitics not included on the list 
+
+table(ABCDE_SPA_hcpi$h_a_1a)
+
+# prompted factors importance
+# likert 1(strongly disagree), 2(disagree), 3(neither agree nor disagree), 4(agree), 5(strongly disagree)
+
+# making a likert graph - 1 column to show unprompted, then sideways bar graph 
+
+# ha1_likert_data <- suppressWarnings(rbind(table(ABCDE_SPA_hcpi$h_a_02),table(ABCDE_SPA_hcpi$h_a_03),table(ABCDE_SPA_hcpi$h_a_04),table(ABCDE_SPA_hcpi$h_a_05),table(ABCDE_SPA_hcpi$h_a_06),table(ABCDE_SPA_hcpi$h_a_07),table(ABCDE_SPA_hcpi$h_a_08),table(ABCDE_SPA_hcpi$h_a_09),table(ABCDE_SPA_hcpi$h_a_10),table(ABCDE_SPA_hcpi$h_a_11)))
+
+table(ABCDE_SPA_hcpi$h_a_02)
+table(ABCDE_SPA_hcpi$h_a_03)
+table(ABCDE_SPA_hcpi$h_a_04)
+table(ABCDE_SPA_hcpi$h_a_05)
+table(ABCDE_SPA_hcpi$h_a_06)
+table(ABCDE_SPA_hcpi$h_a_07)
+table(ABCDE_SPA_hcpi$h_a_08)
+table(ABCDE_SPA_hcpi$h_a_09)
+table(ABCDE_SPA_hcpi$h_a_10)
+table(ABCDE_SPA_hcpi$h_a_11)
+
+
+ha1_likert_data <- data.frame(ha02 = c(sum(ABCDE_SPA_hcpi$h_a_02==1),sum(ABCDE_SPA_hcpi$h_a_02==2),sum(ABCDE_SPA_hcpi$h_a_02==3),sum(ABCDE_SPA_hcpi$h_a_02==4),sum(ABCDE_SPA_hcpi$h_a_02==5)),
+                                 ha03 = c(sum(ABCDE_SPA_hcpi$h_a_03==1),sum(ABCDE_SPA_hcpi$h_a_03==2),sum(ABCDE_SPA_hcpi$h_a_03==3),sum(ABCDE_SPA_hcpi$h_a_03==4),sum(ABCDE_SPA_hcpi$h_a_03==5)),
+                                 ha04 = c(sum(ABCDE_SPA_hcpi$h_a_04==1),sum(ABCDE_SPA_hcpi$h_a_04==2),sum(ABCDE_SPA_hcpi$h_a_04==3),sum(ABCDE_SPA_hcpi$h_a_04==4),sum(ABCDE_SPA_hcpi$h_a_04==5)),
+                                 ha05 = c(sum(ABCDE_SPA_hcpi$h_a_05==1),sum(ABCDE_SPA_hcpi$h_a_05==2),sum(ABCDE_SPA_hcpi$h_a_05==3),sum(ABCDE_SPA_hcpi$h_a_05==4),sum(ABCDE_SPA_hcpi$h_a_05==5)),
+                                 ha06 = c(sum(ABCDE_SPA_hcpi$h_a_06==1),sum(ABCDE_SPA_hcpi$h_a_06==2),sum(ABCDE_SPA_hcpi$h_a_06==3),sum(ABCDE_SPA_hcpi$h_a_06==4),sum(ABCDE_SPA_hcpi$h_a_06==5)),
+                                 ha07 = c(sum(ABCDE_SPA_hcpi$h_a_07==1),sum(ABCDE_SPA_hcpi$h_a_07==2),sum(ABCDE_SPA_hcpi$h_a_07==3),sum(ABCDE_SPA_hcpi$h_a_07==4),sum(ABCDE_SPA_hcpi$h_a_07==5)),
+                                 ha08 = c(sum(ABCDE_SPA_hcpi$h_a_08==1),sum(ABCDE_SPA_hcpi$h_a_08==2),sum(ABCDE_SPA_hcpi$h_a_08==3),sum(ABCDE_SPA_hcpi$h_a_08==4),sum(ABCDE_SPA_hcpi$h_a_08==5)),
+                                 ha09 = c(sum(ABCDE_SPA_hcpi$h_a_09==1),sum(ABCDE_SPA_hcpi$h_a_09==2),sum(ABCDE_SPA_hcpi$h_a_09==3),sum(ABCDE_SPA_hcpi$h_a_09==4),sum(ABCDE_SPA_hcpi$h_a_09==5)),
+                                 ha10 = c(sum(ABCDE_SPA_hcpi$h_a_10==1),sum(ABCDE_SPA_hcpi$h_a_10==2),sum(ABCDE_SPA_hcpi$h_a_10==3),sum(ABCDE_SPA_hcpi$h_a_10==4),sum(ABCDE_SPA_hcpi$h_a_10==5)),
+                                 ha11 = c(sum(ABCDE_SPA_hcpi$h_a_11==1),sum(ABCDE_SPA_hcpi$h_a_11==2),sum(ABCDE_SPA_hcpi$h_a_11==3),sum(ABCDE_SPA_hcpi$h_a_11==4),sum(ABCDE_SPA_hcpi$h_a_11==5)))
+
+ha1_likert_data <- t(ha1_likert_data)
+
+
+rownames(ha1_likert_data) <- c("Clinical condition of the child is severe or has danger signs","Child lives far away from the facility or the closest hospital","Non-acceptance of referral by caregiver","Fear of missing a treatable infection ","The caregiver asked for an antibiotic","Paper guideline recommendations ","The preferred antibiotic is not available","Concern about possible side effects","Concern about antibiotic resistance","digital_tool recommendations")
+
+colnames(ha1_likert_data) <- c("Strongly Disagree", "Disagree","Neither Agree nor Disagree","Agree","Strongly Agree")
+
+ha1_likert_data_df <- as.data.frame(ha1_likert_data)
+
+#table 
+
+ha1_likert_data %>%
+  kbl(caption = "Factors and how they may/ not influence precribers decisions when prescribing antibiotics") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+#graph 
+
+HH::likert(~., ha1_likert_data_df, 
+           positive.order = TRUE, as.percent = FALSE,
+           main = " Figure 9: What factors prescribers take into consideration when prescribing antibiotics - prompted",
+           xlab = "Response Count", ylab = "Factors") 
+
+
+
+
+```
+
+-   When you decide to prescribe an antibiotic, which factors influence your decision on which antibiotic to prescribe?
+
+```{r}
+#c 
+
+# ---------- unprompted answers 
+
+# split values 
+split_values_3 <- lapply(ABCDE_SPA_hcpi$h_a_3, function(x) unlist(strsplit(x, " ")))
+table(unlist(split_values_3))
+
+# table 
+ ha3 <- data.frame(which_antibiotic = c("Clinical condition / diagnosis of the child", "Look at what antibiotics the child has previously taken ","The caregiver asks you to prescribe antibiotics", "You are more likely to precsribe antibiotics you are familiar with ", "What paper guideline recommend", "What digital_tool guidelines recommend","Other Specified"), 
+                   ha3_count = c(sum(unlist(split_values_3) == 1),sum(unlist(split_values_3) == 2),sum(unlist(split_values_3) == 3),sum(unlist(split_values_3) == 4),sum(unlist(split_values_3) == 5),sum(unlist(split_values_3) == 6),sum(unlist(split_values_3) == 99)))
+
+ha3$ha3_count <- ifelse(is.na(ha3$ha3_count), 0, ha3$ha3_count)
+ha3 <- ha3[order(ha3$ha3_count, decreasing = TRUE), ]
+
+
+ha3 %>%
+  kbl(row.names = FALSE, caption = "When you decide to prescribe an antibiotic, which factors influence your decision on which antibiotic to prescribe? - unprompted") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# free text 
+
+table(ABCDE_SPA_hcpi$h_a_3a)
+
+# --------------- prompted answers 
+
+table(ABCDE_SPA_hcpi$h_a_3b1)
+table(ABCDE_SPA_hcpi$h_a_3b2)
+table(ABCDE_SPA_hcpi$h_a_3b3)
+table(ABCDE_SPA_hcpi$h_a_3b4)
+table(ABCDE_SPA_hcpi$h_a_3b5)
+table(ABCDE_SPA_hcpi$h_a_3b6)
+
+ha3_likert <- data.frame(h31 =c(sum(ABCDE_SPA_hcpi$h_a_3b1==1),sum(ABCDE_SPA_hcpi$h_a_3b1==2),sum(ABCDE_SPA_hcpi$h_a_3b1==3),sum(ABCDE_SPA_hcpi$h_a_3b1==4),sum(ABCDE_SPA_hcpi$h_a_3b1==5)),
+                         h32 =c(sum(ABCDE_SPA_hcpi$h_a_3b2==1),sum(ABCDE_SPA_hcpi$h_a_3b2==2),sum(ABCDE_SPA_hcpi$h_a_3b2==3),sum(ABCDE_SPA_hcpi$h_a_3b2==4),sum(ABCDE_SPA_hcpi$h_a_3b2==5)),
+                         h33 =c(sum(ABCDE_SPA_hcpi$h_a_3b3==1),sum(ABCDE_SPA_hcpi$h_a_3b3==2),sum(ABCDE_SPA_hcpi$h_a_3b3==3),sum(ABCDE_SPA_hcpi$h_a_3b3==4),sum(ABCDE_SPA_hcpi$h_a_3b3==5)),
+                         h34 =c(sum(ABCDE_SPA_hcpi$h_a_3b4==1),sum(ABCDE_SPA_hcpi$h_a_3b4==2),sum(ABCDE_SPA_hcpi$h_a_3b4==3),sum(ABCDE_SPA_hcpi$h_a_3b4==4),sum(ABCDE_SPA_hcpi$h_a_3b4==5)),
+                         h35 =c(sum(ABCDE_SPA_hcpi$h_a_3b5==1),sum(ABCDE_SPA_hcpi$h_a_3b5==2),sum(ABCDE_SPA_hcpi$h_a_3b5==3),sum(ABCDE_SPA_hcpi$h_a_3b5==4),sum(ABCDE_SPA_hcpi$h_a_3b5==5)),
+                         h36 =c(sum(ABCDE_SPA_hcpi$h_a_3b6==1),sum(ABCDE_SPA_hcpi$h_a_3b6==2),sum(ABCDE_SPA_hcpi$h_a_3b6==3),sum(ABCDE_SPA_hcpi$h_a_3b6==4),sum(ABCDE_SPA_hcpi$h_a_3b6==5)))
+
+ha3_likert <- t(ha3_likert)
+
+rownames(ha3_likert) <- c("Clinical condition / diagnosis of the child", "Look at what antibiotics the child has previously taken ","The caregiver asks you to prescribe antibiotics", "You are more likely to precsribe antibiotics you are familiar with ", "What paper guideline recommend", "What digital_tool guidelines recommend")
+
+colnames(ha3_likert) <- c("Strongly Disagree", "Disagree","Neither Agree nor Disagree","Agree","Strongly Agree")
+
+ha3_likertdf <- as.data.frame(ha3_likert)
+
+#table 
+
+ha3_likert %>%
+  kbl(caption = "When you decide to prescribe an antibiotic, which factors influence your decision on which antibiotic to prescribe?  - prompted") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+#graph 
+
+HH::likert(~., ha3_likertdf, 
+           positive.order = TRUE, as.percent = FALSE,
+           main = "When you decide to prescribe an antibiotic, which factors influence your decision on which antibiotic to prescribe? - prompted",
+           xlab = "Response Percent", ylab = "Factors")
+
+
+
+
+```
+
+-   Has the digital_tool helped you to make decisions about when to prescribe antibiotics?
+    -   likert - neither agree nor disagree (20%), agree (30%), strongly agree (50%)
+
+```{r}
+#d
+
+#likert
+table(ABCDE_SPA_hcpi$h_a_4)
+```
+
+-   Sometimes healthcare providers disagree with the antibiotic treatment recommendations in the digital_tool, from your experience which factors may influence this?
+
+```{r}
+# e
+
+split_values_5 <- lapply(ABCDE_SPA_hcpi$h_a_5, function(x) unlist(strsplit(x, " ")))
+table(unlist(split_values_5))
+
+table(ABCDE_SPA_hcpi$h_a_5a)
+
+ha5_df <- data.frame(digital_tool_use=c("digital_tool has not provided correct diagnosis","digital_tool has not provided correct treatment recommendation","Caregiver request","Stock of prefferred treatment not available","(Free Text) Seriousness of disease,  refusal of referral"),
+                     ha5_count=c(sum(unlist(split_values_5)==1,na.rm=TRUE),sum(unlist(split_values_5)==2,na.rm=TRUE),sum(unlist(split_values_5)==3,na.rm=TRUE),sum(unlist(split_values_5)==4,na.rm=TRUE),sum(unlist(split_values_5)==99,na.rm=TRUE)))
+
+ha5_df %>%
+  kbl(caption = "Sometimes healthcare providers disagree with the antibiotic treatment recommendations in the digital_tool, from your experience which factors may influence this? - unprompted") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+-   Do you have any challenges in making a decision to prescribe antibiotics
+
+```{r}
+
+#f
+
+table(ABCDE_SPA_hcpi$h_a_6a)
+
+# make into a new summarise variable
+    # 0=none, 1=availibility, 2=other 
+
+#this is the code for the freetext from all of the answers, but the dataframe was changed only to include the answers from the digital_tool HCPs so only those will be recoded 
+
+ABCDE_SPA_hcpi <- ABCDE_SPA_hcpi %>%
+    dplyr::mutate(
+      ha6_recode = dplyr::recode(h_a_6a, 
+                            "a child who has used many antibiotics within one month or more"=2,
+                            "Antibiotic Availability" =1,
+                            "Availability of adequate antibiotics" =1,
+                            "Availability of drugs" = 1,
+                            "Availability of guideline-recommended antibiotics" = 1,
+                            "Drug shortage" = 1,
+                            "Drug shortages" = 1,
+                            "I don't have any challenge in giving antibiotics" = 0,
+                            "I don't see any challenge." =0,
+                            "I follow work procedures without coercion" =0,
+                            "I have no challenge"=0,
+                            "I have no challenge in making the decision to give antibiotics"=0,
+                            "Lack of antibiotics at the facility"=1,
+                            "Lack of antibiotics in facility"=1,
+                            "Lack of medicine at the facility"=1,
+                            "Lack of medicine here at the clinic"=1,
+                            "No, I don't have any challenge in making the decision to give antibiotics"=0,
+                            "Non-availability of medicine, poor education for managers or guardians who give children medicine at home"=1,
+                            "None"=0,
+                            "The antibiotics that should be given to the patient are not available at the drug store at the moment"=1,
+                            "The availability of antibiotics, for example, the antibiotic I recommend due to a child's illness is not available today"=1,
+                            "The lack of medicine is the biggest challenge in making the decision to give antibiotics"=1,
+                            "The preferred antibiotic is out of stock or not available at the facility"=1,
+                            "The shortage of drugs makes him repeat the same drugs that are available at the facility"=1,
+                            "The shortage of medicine makes me decide to give the patient medicines available at the facility so he may not get the best medicine according to his problem"=1,
+                            "There are some parents who come with their choice of medicine already, and maybe it is not suitable according to the diagnosis of the child"=2,
+                            "There is no challenge in making decisions to give antibiotics"=0,
+                            "When the parent does not know the weight of the child"=2)) 
+
+
+table(ABCDE_SPA_hcpi$ha6_recode)
+
+
+ha6_freecode <- data.frame(reason = c("none","availibility"),
+                           ha6_count=c(sum(table(ABCDE_SPA_hcpi$ha6_recode)["0"]),sum(table(ABCDE_SPA_hcpi$ha6_recode)["1"])))
+total_count <- sum(ha6_freecode$ha6_count)
+ha6_freecode
+                            
+ha6_freecode %>%
+  kbl(caption = "Table X. Challenges faced when prescring antibiotics as reported by healthcare providers in the digital_tool arm") %>%
+  kable_classic(full_width = F, html_font = "Cambria")    
+```
+
+-   What could be done to help you and your colleagues to take decisions about when to prescribe antibiotics?
+
+```{r}
+#g
+
+split_values_7 <- lapply(ABCDE_SPA_hcpi$h_a_7, function(x) unlist(strsplit(x, " ")))
+table(unlist(split_values_7))
+
+table(ABCDE_SPA_hcpi$h_a_7a)
+
+ha7 <- data.frame(Antibiotic_decidion = c("Paper Guidelines","Mentorship from supervisors/ collegues","Training","digital_tool"), 
+                  decision_count = c(sum(unlist(split_values_7) == 1),sum(unlist(split_values_7) == 2),sum(unlist(split_values_7) == 3),sum(unlist(split_values_7) == 4)))
+
+ha7%>%
+  kbl(caption = "What could be done to help you and your colleagues to take decisions about when to prescribe antibiotics") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+```
+
+-   Have you heard of the term 'antibiotic resistance'?
+
+```{r}
+# h 
+
+#100% heard of antibiotic resistance 
+
+ha8 <- table(ABCDE_SPA_hcpi$h_a_8a)
+ha8
+
+ha8%>%
+  kbl(caption = "Have you heard of the term 'antibiotic resistance?") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+################# cleaning 
+
+# themes mentioned 
+    #1 = Medication Ineffectivenss 
+    #2 = Prolonged use 
+    #3 = Medication misuse 
+    #4 = Side Effects 
+    #5 = Parasite building immunity? 
+
+ABCDE_SPA_hcpi <- ABCDE_SPA_hcpi %>%
+  dplyr::mutate(
+    ha8a_recode = dplyr::recode(
+      h_a_8a,
+      "A person has used a lot of medicine without having a problem, the day he has a problem that requires that medicine, it doesn't help him." = "1;3",
+      "Antibiotic resistance is a medicine that fails to work after using it for a long time" = "1;2",
+      "It is a problem resulting from the indiscriminate use of antibiotic medicine that leads to the patient not recovering when given the medicine" = "3;1",
+      "Medicines do not work due to the misuse of antibiotics" = "1;3",
+      "Medicines fail to work properly in the body due to misuse of medicines" = "1;3",
+      "The medicine will not help the patient due to incorrect use or long-term use" = "1;2;3",
+      "The use of antibiotics without following the guidelines for the use of antibiotics and causing side effects and disease persistence" = "1;3:4",
+      "Using one type of drug for a long time, such as ampiclox" = "2",
+      "Using the same type of antibiotic for a long time" = "2",
+      "When you use antibiotics but it does not cure the disease, that is, the recommended medicine fails to cure the disease due to the parasites building immunity against the poison brought by the medicine" = "1;5"
+    )
+  )  %>%
+  tidyr::separate_rows(ha8a_recode ) %>%
+  dplyr::mutate(val_ha8 = 1) %>%
+  tidyr::pivot_wider(names_from = ha8a_recode, values_from = val_ha8, names_repair = "unique")
+
+abx_res <- data.frame(
+  abx_res = c(
+    "Medication Ineffectivenss","Prolonged use","Medication misuse","Side Effects","Parasite building immunity"
+  ),
+  res_result = c(
+    sum(ABCDE_SPA_hcpi$`1`==1,na.rm=TRUE),
+    sum(ABCDE_SPA_hcpi$`2`==1,na.rm=TRUE),
+    sum(ABCDE_SPA_hcpi$`3`==1,na.rm=TRUE),
+    sum(ABCDE_SPA_hcpi$`4`==1,na.rm=TRUE),
+    sum(ABCDE_SPA_hcpi$`5`==1,na.rm=TRUE)
+  )
+)
+
+abx_res
+
+```
+
+-   Do you think your antibiotic prescribing decisions have an influence on antibiotic resistance?
+
+```{r}
+# i
+table(ABCDE_SPA_hcpi$h_a_9)
+
+ha9 <- data.frame (ha9= c(sum(ABCDE_SPA_hcpi$h_a_9==1),sum(ABCDE_SPA_hcpi$h_a_9==2),sum(ABCDE_SPA_hcpi$h_a_9==3),sum(ABCDE_SPA_hcpi$h_a_9==4),sum(ABCDE_SPA_hcpi$h_a_9==5)))
+
+ha9 <- t(ha9)
+
+rownames(ha9) <- c("")
+
+colnames(ha9) <- c("Strongly Disagree", "Disagree","Neither Agree nor Disagree","Agree","Strongly Agree")
+
+ha9_df <- as.data.frame(ha9)
+
+#graph 
+
+HH::likert(~., ha9_df, 
+           positive.order = TRUE, as.percent = FALSE,
+           main = "Do you think your antibiotic prescribing decisions have an influence on antibiotic resistance?",
+           xlab = "Response Percent", ylab = "") 
+
+ha9%>%
+  kbl(caption = "Have you heard of the term 'antibiotic resistance?") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+-   grouped single response questions
+
+```{r}
+# j
+
+
+spa_tot <- data.frame(
+  SPA = c("Clinical condition/diagnosis of the child", "Distance", "Caregiver Factors", "Paper Guidelines", 
+           "Drug Availability", "Side Effects", "Antibiotic Resistance", "digital_tool",
+           "Clinical condition/diagnosis of the child", "Look at what antibiotics the child has previously taken",
+           "The caregiver asks you to prescribe antibiotics", "You are more likely to prescribe antibiotics you are familiar with",
+           "What paper guideline recommend", "What digital_tool guidelines recommend",
+           "digital_tool has not provided correct diagnosis", "digital_tool has not provided correct treatment recommendation",
+           "Caregiver request", "Stock of preferred treatment not available",
+           "(Free Text) Seriousness of disease, refusal of referral", "none", "availability",
+           "Paper Guidelines", "Mentorship from supervisors/colleagues", "Training", "digital_tool","Medication Ineffectivenss","Prolonged use","Medication misuse","Side Effects","Parasite building immunity"),
+  count = c(ha1_tab["1"], ha1_tab["2"], ha1_tab["4"], ha1_tab["7"], ha1_tab["8"], ha1_tab["9"], ha1_tab["10"], ha1_tab["11"],
+            sum(unlist(split_values_3) == 1), sum(unlist(split_values_3) == 2), sum(unlist(split_values_3) == 3),
+            sum(unlist(split_values_3) == 4), sum(unlist(split_values_3) == 5), sum(unlist(split_values_3) == 6),
+            sum(unlist(split_values_5) == 1, na.rm = TRUE), sum(unlist(split_values_5) == 2, na.rm = TRUE),
+            sum(unlist(split_values_5) == 3, na.rm = TRUE), sum(unlist(split_values_5) == 4, na.rm = TRUE),
+            sum(unlist(split_values_5) == 99, na.rm = TRUE),
+            sum(table(ABCDE_SPA_hcpi$ha6_recode)["0"]), sum(table(ABCDE_SPA_hcpi$ha6_recode)["1"]),
+            sum(unlist(split_values_7) == 1), sum(unlist(split_values_7) == 2),
+            sum(unlist(split_values_7) == 3), sum(unlist(split_values_7) == 4),sum(ABCDE_SPA_hcpi$`1`==1,na.rm=TRUE), sum(ABCDE_SPA_hcpi$`2`==1,na.rm=TRUE),sum(ABCDE_SPA_hcpi$`3`==1,na.rm=TRUE),sum(ABCDE_SPA_hcpi$`4`==1,na.rm=TRUE),sum(ABCDE_SPA_hcpi$`5`==1,na.rm=TRUE))
+)
+
+spa_tot <- spa_tot %>%
+  mutate(count = ifelse(is.na(count), 0, count))
+
+spa_tot %>%
+  kable(caption = "", format = "html", row.names = FALSE) %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(font_size = 15) %>%
+  pack_rows("Factors considered bx HCPs when prescribing antibiotics", 1, 8) %>%
+  pack_rows("Factors influencing which antibiotic to prescribe by HCPs", 9, 14) %>%
+  pack_rows("Factors influencing disagreement with digital_tool recommendations by HCPs", 15, 19) %>%
+  pack_rows("Challenges faced by HCPs when prescribing antibiotics", 20, 21) %>%
+  pack_rows("Helpful decision aids for HCPs when making antibiotic prescribing decisions", 22, 25) %>%
+  pack_rows("What the term Antibiotic Resistance means to HCPs", 26, 30) 
+
+spa_tot <- rbind(
+  spa_tot[1:8, ] %>% arrange(desc(count)),
+  spa_tot[9:14, ] %>% arrange(desc(count)),
+  spa_tot[15:19, ] %>% arrange(desc(count)),
+  spa_tot[20:21, ] %>% arrange(desc(count)),
+  spa_tot[22:25, ] %>% arrange(desc(count)),
+  spa_tot[26:30, ] %>% arrange(desc(count))
+)
+
+
+```
+
+-   merge likert
+
+```{r}
+#k
+
+library(gridExtra)
+
+# Likert plot for ha1_likert_data_df
+likert_plot1 <- HH::likert(~., ha1_likert_data_df, 
+                           positive.order = TRUE, as.percent = FALSE,
+                           main = "What factors prescribers take into consideration when prescribing antibiotics - prompted",
+                           xlab = "Response Count", ylab = "Factors")
+
+# Likert plot for ha3_likertdf
+likert_plot2 <- HH::likert(~., ha3_likertdf, 
+                           positive.order = TRUE, as.percent = FALSE,
+                           main = "When you decide to prescribe an antibiotic, which factors influence your decision on which antibiotic to prescribe? - prompted",
+                           xlab = "Response Percent", ylab = "Factors")
+
+# Arrange the plots side by side
+grid.arrange(likert_plot1, likert_plot2, ncol = 2)
+
+```
