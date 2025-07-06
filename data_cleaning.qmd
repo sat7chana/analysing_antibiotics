@@ -1,0 +1,1161 @@
+---
+title: ""
+format: html
+editor: visual
+---
+
+## ABCDE 
+
+```{r}
+library(readxl)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+
+```
+
+Check and drop empty variables to make new dataset
+
+```{r}
+
+ABCDE_T <- read_excel("")
+
+empty_vars <- colSums(is.na(ABCDE_T)) == nrow(ABCDE_T)
+
+# Store variable names which are empty to view which have been dropped
+empty_vars_names <- names(empty_vars)[empty_vars]
+#print(empty_vars_names)
+
+# Drop the empty variables for the new dataset which is being cleaned ABCDE_T
+ABCDE_T <- ABCDE_T[, !empty_vars, drop = FALSE]
+
+#merge_id for merge purposes 
+ABCDE_T$merge_id <- paste0("T_", ABCDE_T$id)
+
+```
+
+Make a loop for the different prefix variables to see which vars are in the new dataset
+
+```{r}
+
+# Define the list of prefixes
+prefixes <- c("dem_type","dem_sex","uni_tri_que", "com_cat", "bas_dem", "bas_mea", "tre_que", "phy_exa", "sym", "bac_cal", "ass_tes", "obs_phy", "chr_con", "_exp_", "ref_", "vac_")
+
+# Initialize an empty list to store variables
+matching_variables <- list()
+
+# Loop over each prefix
+for (prefix in prefixes) {
+  # Find variables in ABCDE_T dataset that contain the prefix
+  prefix_variables <- grep(prefix, names(ABCDE_T), value = TRUE)
+  # Add found variables to the list
+  matching_variables[[prefix]] <- prefix_variables
+}
+
+# Print the list of variables for each prefix
+print(matching_variables)
+
+#
+
+```
+
+Base Demographics
+
+```{r}
+
+ # Get the list of variables with the "bas_dem" prefix = 13
+bd_vars_list <- grep("bas_dem", names(ABCDE_T), value = TRUE)
+print(bd_vars_list)
+
+
+sum(!is.na(ABCDE_T$'4_5132_bas_dem_age_days_value'))
+sum(!is.na(ABCDE_T$'67_5132_bas_dem_age_days_value'))
+
+#convert into numeric 
+ABCDE_T$bd_age_a <- as.numeric(ABCDE_T$'67_5132_bas_dem_age_days_value')
+ABCDE_T$bd_age_b <- as.numeric(ABCDE_T$'4_5132_bas_dem_age_days_value')
+
+# Number of rows where both variables have a value = 0
+both_have_value_age <- sum(!is.na(ABCDE_T$"4_5132_bas_dem_age_days_value") & !is.na(ABCDE_T$"67_5132_bas_dem_age_days_value"))
+
+# Number of rows where both variables are either empty or have NA values = 0
+both_empty_or_na_age <- sum(is.na(ABCDE_T$"4_5132_bas_dem_age_days_value") & is.na(ABCDE_T$"67_5132_bas_dem_age_days_value"))
+
+# Number of rows where only one variable has a value = 38167
+only_one_has_value_age <- sum(xor(!is.na(ABCDE_T$"4_5132_bas_dem_age_days_value"), !is.na(ABCDE_T$"67_5132_bas_dem_age_days_value")))
+
+#merge variables, new var = bd_age_days
+ABCDE_T$bd_age_days <- rowSums(ABCDE_T[, c("bd_age_b", "bd_age_a")], na.rm = TRUE)
+#check to make sure merged correctly + no missing values 
+sum(!is.na(ABCDE_T$bd_age_days))
+
+
+#split age days into bd_age_yi and bd_age_259 and new months for var  
+# yi = 0-59days
+ABCDE_T$bd_age_yi <- ifelse(ABCDE_T$bd_age_days >= 0 & ABCDE_T$bd_age_days <= 59, ABCDE_T$bd_age_days, NA)
+#table(ABCDE_T$bd_age_yi, useNA = "ifany")
+
+# Create a new variable bd_age_259 for ages days 60-1825
+ABCDE_T$bd_age_259 <- ifelse(ABCDE_T$bd_age_days >= 60 & ABCDE_T$bd_age_days <= 1825, ABCDE_T$bd_age_days, NA)
+#table(ABCDE_T$bd_age_259, useNA = "ifany")
+
+#new var for months 
+ABCDE_T$bd_age_months <- floor(ABCDE_T$bd_age_days / 30)
+
+#new var 1=0-1 month yi, 2=2-59 months
+ABCDE_T$bd_age_cat <- ifelse(ABCDE_T$bd_age_months %in% 0:1, 1, 2)
+
+# Number of rows where both variables have a value = 0
+sum(!is.na(ABCDE_T$"120_5302_bas_dem_child_registration_no_value") & !is.na(ABCDE_T$"34_5302_bas_dem_child_registration_no_value"))
+
+#number of rows where both variables have a value = 474
+sum(!is.na(ABCDE_T$bd_age_yi) & !is.na(ABCDE_T$"120_5302_bas_dem_child_registration_no_value"))
+
+#number of rows where both variables have a value = 11008
+sum(!is.na(ABCDE_T$bd_age_259) & !is.na(ABCDE_T$"120_5302_bas_dem_child_registration_no_value"))
+
+#number of rows where both variables are either empty or have NA values = 1381
+sum(is.na(ABCDE_T$bd_age_259) & is.na(ABCDE_T$"120_5302_bas_dem_child_registration_no_value"))
+
+#no relationship between reg and age
+
+#merge. non numeric so paste function 
+ABCDE_T$bd_child_reg <- coalesce(ABCDE_T$"120_5302_bas_dem_child_registration_no_value", ABCDE_T$"34_5302_bas_dem_child_registration_no_value")
+
+# Drop the old variables
+ABCDE_T[, bd_vars_list] <- NULL
+
+######tabulate the new vars 
+ABCDE_T <- ABCDE_T[, !names(ABCDE_T) %in% c("bd_age_a", "bd_age_b")]
+
+grep("bd_", names(ABCDE_T), value = TRUE)
+
+```
+
+Complaint Category
+
+```{r}
+#print list of the variables with com_cat
+
+cc_vars_list <- grep("com_cat", names(ABCDE_T), value = TRUE)
+print(cc_vars_list)
+
+for (variable_name in cc_vars_list) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+# Create a lookup table
+lookup_table_cc <- c("Yes" = 1, "No" = 0)
+
+for (variable_name in cc_vars_list) {
+  ABCDE_T[[variable_name]] <- ifelse(ABCDE_T[[variable_name]] %in% c("Yes", "No"), lookup_table_cc[ABCDE_T[[variable_name]]], NA)
+}
+
+# number of rows where only one variable has a value = 38167
+sum(!is.na(ABCDE_T$'10_5166_com_cat_yellow_appearing_skin_or_eyes_jaundice_answer_label') & !is.na(ABCDE_T$'76_5166_com_cat_yellow_appearing_skin_or_eyes_jaundice_answer_label'))
+
+#merge the vars 
+ABCDE_T$cc_jaundice <- rowSums(ABCDE_T[, c("10_5166_com_cat_yellow_appearing_skin_or_eyes_jaundice_answer_label", "76_5166_com_cat_yellow_appearing_skin_or_eyes_jaundice_answer_label")], na.rm = TRUE)
+
+#total values = 38167
+sum(!is.na(ABCDE_T$cc_jaundice))
+
+#cc_eye_complaint
+sum(!is.na(ABCDE_T$'11_5790_com_cat_eye_complaint_answer_label') & !is.na(ABCDE_T$'78_5790_com_cat_eye_complaint_answer_label'))
+ABCDE_T$cc_eye_complaint <- rowSums(ABCDE_T[, c("11_5790_com_cat_eye_complaint_answer_label", "78_5790_com_cat_eye_complaint_answer_label")], na.rm = TRUE)
+
+#cc_fever
+sum(!is.na(ABCDE_T$'12_5805_com_cat_fever_answer_label') & !is.na(ABCDE_T$'80_5805_com_cat_fever_answer_label'))
+ABCDE_T$cc_fever <- rowSums(ABCDE_T[, c("12_5805_com_cat_fever_answer_label", "80_5805_com_cat_fever_answer_label")], na.rm = TRUE)
+
+#cc_malformation
+sum(!is.na(ABCDE_T$'13_5196_com_cat_malformation_birth_anomaly_answer_label') & !is.na(ABCDE_T$'81_5196_com_cat_malformation_birth_anomaly_answer_label'))
+ABCDE_T$cc_malformation <- rowSums(ABCDE_T[, c("13_5196_com_cat_malformation_birth_anomaly_answer_label", "81_5196_com_cat_malformation_birth_anomaly_answer_label")], na.rm = TRUE)
+
+#cc_fever_convulsion_lethargy
+sum(!is.na(ABCDE_T$'14_5198_com_cat_fever_or_convulsions_or_lethargy_answer_label') & !is.na(ABCDE_T$'83_5198_com_cat_fever_or_convulsions_or_lethargy_answer_label'))
+ABCDE_T$cc_fever_convulsion_lethargy <- rowSums(ABCDE_T[, c("14_5198_com_cat_fever_or_convulsions_or_lethargy_answer_label", "83_5198_com_cat_fever_or_convulsions_or_lethargy_answer_label")], na.rm = TRUE)
+
+#cc_ear_mouth
+sum(!is.na(ABCDE_T$'16_5797_com_cat_ear_or_mouth_complaint_answer_label') & !is.na(ABCDE_T$'87_5797_com_cat_ear_or_mouth_complaint_answer_label'))
+ABCDE_T$cc_ear_mouth <- rowSums(ABCDE_T[, c("16_5797_com_cat_ear_or_mouth_complaint_answer_label", "87_5797_com_cat_ear_or_mouth_complaint_answer_label")], na.rm = TRUE)
+
+#cc_eye
+sum(!is.na(ABCDE_T$'89_5530_com_cat_eye_answer_label') & !is.na(ABCDE_T$'17_5530_com_cat_eye_answer_label'))
+ABCDE_T$cc_eye <- rowSums(ABCDE_T[, c("89_5530_com_cat_eye_answer_label", "17_5530_com_cat_eye_answer_label")], na.rm = TRUE)
+
+#checking if cc_eye and cc_eye_al are the same or not 
+all(ABCDE_T$cc_eye == ABCDE_T$cc_eye_al & !is.na(ABCDE_T$cc_eye) & !is.na(ABCDE_T$cc_eye_al)) # = False = the rows are different 
+
+#cc_injury
+sum(!is.na(ABCDE_T$'21_5702_com_cat_injuries_birth_and_non_birth_related_answer_label') & !is.na(ABCDE_T$'96_5702_com_cat_injuries_birth_and_non_birth_related_answer_label'))
+ABCDE_T$cc_injury <- rowSums(ABCDE_T[, c("21_5702_com_cat_injuries_birth_and_non_birth_related_answer_label", "96_5702_com_cat_injuries_birth_and_non_birth_related_answer_label")], na.rm = TRUE)
+
+#cc_other answer label = can't merge as all cells occupied - not sure what they are the answer labels for and if can merge the yes answers? 
+sum(!is.na(ABCDE_T$'24_5843_com_cat_other_answer_label') & !is.na(ABCDE_T$'25_5845_com_cat_other_answer_label'))
+
+#cc_gen_uni_al
+sum(!is.na(ABCDE_T$'3_5145_com_cat_general_universal_assessment_answer_label') & !is.na(ABCDE_T$'66_5145_com_cat_general_universal_assessment_answer_label'))
+ABCDE_T$cc_gen_universal_al <- rowSums(ABCDE_T[, c("3_5145_com_cat_general_universal_assessment_answer_label", "66_5145_com_cat_general_universal_assessment_answer_label")], na.rm = TRUE)
+
+#cc_follow_up_pp
+sum(!is.na(ABCDE_T$'73_5295_com_cat_follow_up_visit_for_previous_problem_answer_label') & !is.na(ABCDE_T$'8_5295_com_cat_follow_up_visit_for_previous_problem_answer_label'))
+ABCDE_T$cc_follow_up_pp <- rowSums(ABCDE_T[, c("73_5295_com_cat_follow_up_visit_for_previous_problem_answer_label", "8_5295_com_cat_follow_up_visit_for_previous_problem_answer_label")], na.rm = TRUE)
+
+
+#renaming vars 
+ABCDE_T$cc_resp_cough_diff_breathing <- ABCDE_T$'18_5534_com_cat_respiratory_cough_or_difficult_breathing_answer_label'
+
+ABCDE_T$cc_gi <- ABCDE_T$'20_5598_com_cat_gastrointestinal_diarrhea_vomiting_feeding_answer_label'
+
+ABCDE_T$cc_skin <- ABCDE_T$'22_5798_com_cat_skin_answer_label'
+
+ABCDE_T$cc_diarrhea_abdo_gi <- ABCDE_T$'23_5801_com_cat_diarrhea_abdominal_gastro_intestinal_answer_label'
+
+ABCDE_T$cc_oth_al_24 <- ABCDE_T$'24_5843_com_cat_other_answer_label'
+
+ABCDE_T$cc_oth_al_24 <- ABCDE_T$'25_5845_com_cat_other_answer_label'
+
+ABCDE_T$cc_ear_throat_mouth <- ABCDE_T$'26_6069_com_cat_ear_throat_mouth_answer_label'
+
+ABCDE_T$cc_accident <- ABCDE_T$'27_6070_com_cat_accident_musculoskeletal_incl_burns_wounds_poison_answer_label'
+
+ABCDE_T$cc_skin_hair <- ABCDE_T$'28_6073_com_cat_skin_hair_answer_label'
+
+ABCDE_T$cc_feed_weight_problem <- ABCDE_T$'29_6074_com_cat_feeding_problem_or_weight_concern_answer_label'
+
+ABCDE_T$cc_resp <- ABCDE_T$'30_6097_com_cat_respiratory_answer_label'
+
+ABCDE_T$cc_genitourinary  <- ABCDE_T$'31_6098_com_cat_genitourinary_uti_inguinal_scrotal_problems_answer_label'
+
+ABCDE_T$cc_neuro <- ABCDE_T$'32_6099_com_cat_neuro_headache_stiff_neck_neck_pain_answer_label'
+
+ABCDE_T$cc_gen_74 <- ABCDE_T$"74_5144_com_cat_general_answer_label"
+
+ABCDE_T$cc_gen_9 <-ABCDE_T$"9_5144_com_cat_general_answer_label"
+
+#drop the com_cat vars
+#ABCDE_T[, cc_vars_list] <- NULL
+
+
+######tabulate the new vars 
+cc_vars_list_new <- grep("cc_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in cc_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+```
+
+-   Demographic
+
+```{r}
+
+d_vars_list_t <- grep("_dem_type", names(ABCDE_T), value = TRUE)
+d_vars_list_s <- grep("_dem_sex", names(ABCDE_T), value = TRUE)
+d_vars_list <- c(d_vars_list_t, d_vars_list_s)
+
+for (variable_name in d_vars_list) {
+  cat("Variable:", variable_name, "\n")
+  variable_table <- table(ABCDE_T[[variable_name]])
+  print(variable_table)
+  cat("\n")
+}
+
+#convert to numbers 
+for(variable_name in d_vars_list_t) {
+    ABCDE_T[[variable_name]] <- ifelse(ABCDE_T[[variable_name]] == "First visit", 1, ifelse(ABCDE_T[[variable_name]] == "Follow-up visit", 2, ABCDE_T[[variable_name]]))
+}
+
+for(variable_name in d_vars_list_s) {
+    ABCDE_T[[variable_name]] <- ifelse(ABCDE_T[[variable_name]] == "Male", 1, ifelse(ABCDE_T[[variable_name]] == "Female", 2, ABCDE_T[[variable_name]]))
+}
+
+for(variable_name in d_vars_list_s) {
+    ABCDE_T[[variable_name]] <- ifelse(ABCDE_T[[variable_name]] == "male", 1, ifelse(ABCDE_T[[variable_name]] == "female", 2, ABCDE_T[[variable_name]]))
+}
+
+for (variable_name in d_vars_list) {
+  cat("Variable:", variable_name, "\n")
+  variable_table <- table(ABCDE_T[[variable_name]])
+  print(variable_table)
+  cat("\n")
+}
+
+for (variable_name in d_vars_list) {
+  ABCDE_T[[variable_name]] <- as.numeric(ABCDE_T[[variable_name]])
+}
+
+#see if all the vars match 
+table(ABCDE_T$"70_5139_dem_sex_value", ABCDE_T$ "70_5139_dem_sex_answer_label")
+
+# Number of rows where only one variable has a value = 0
+sum(xor(!is.na(ABCDE_T$"70_5139_dem_sex_value"), !is.na(ABCDE_T$"70_5139_dem_sex_answer_label")))
+
+# Check if both variables have the same value in each row = yes, matches the previous table total
+same_values_d_s <- ABCDE_T$"70_5139_dem_sex_value" == ABCDE_T$"70_5139_dem_sex_answer_label"
+num_same_values_d_s <- sum(!is.na(ABCDE_T$"70_5139_dem_sex_value") & !is.na(ABCDE_T$"70_5139_dem_sex_answer_label") & same_values_d_s)
+print(num_same_values_d_s)
+
+#Change name for new var and drop old vars 
+ABCDE_T$d_sex <- ABCDE_T$"70_5139_dem_sex_answer_label"
+
+#"6_5139_dem_sex_answer_label"                
+#"6_5139_dem_sex_value"  
+
+table(ABCDE_T$"6_5139_dem_sex_answer_label", ABCDE_T$ "6_5139_dem_sex_value")
+# Number of rows where one variable has a value
+sum(xor(!is.na(ABCDE_T$"6_5139_dem_sex_answer_label"), !is.na(ABCDE_T$"6_5139_dem_sex_value")))
+
+#rename var 
+ABCDE_T$d_sex_b <- ABCDE_T$"6_5139_dem_sex_answer_label"
+
+#Number of rows where only one variable has a value = 38167 
+sum(xor(!is.na(ABCDE_T$d_sex), !is.na(ABCDE_T$d_sex_b)))
+#merge 
+ABCDE_T$d_sex <- coalesce(ABCDE_T$d_sex, ABCDE_T$d_sex_b)
+
+ABCDE_T[, "d_sex_b"] <- NULL
+
+table(ABCDE_T$d_sex)
+
+#consultation answer label 
+
+table(ABCDE_T$"1_22727_dem_type_consultation_answer_label")
+table(ABCDE_T$"62_22727_dem_type_consultation_answer_label")
+# Number of rows where only one variable has a value = 38167
+sum(xor(!is.na(ABCDE_T$"1_22727_dem_type_consultation_answer_label"), !is.na(ABCDE_T$"62_22727_dem_type_consultation_answer_label")))
+ABCDE_T$d_consultation <- coalesce(ABCDE_T$"1_22727_dem_type_consultation_answer_label", ABCDE_T$"62_22727_dem_type_consultation_answer_label")
+table(ABCDE_T$d_consultation)
+
+#drop vars
+#ABCDE_T[, d_vars_list] <- NULL
+
+######tabulate the new vars 
+d_vars_list_new <- grep("^d_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in d_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+```
+
+-   Base Measurements
+
+```{r}
+
+bm_vars_list <- grep("bas_mea", names(ABCDE_T), value = TRUE)
+
+for (variable_name in bm_vars_list) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+#118_5133_bas_mea_current_weight_kg_value    
+ABCDE_T$bm_weight_kg <- gsub("_measured", "", ABCDE_T$'118_5133_bas_mea_current_weight_kg_value')
+ABCDE_T$bm_weight_kg <- gsub("_estimated", "", ABCDE_T$bm_weight_kg)
+ABCDE_T$bm_weight_kg<-as.numeric(ABCDE_T$bm_weight_kg)
+
+#weight measurement label 
+ABCDE_T$bm_weight_label_33 <- gsub("[0-9._]+", "", ABCDE_T$'33_5133_bas_mea_current_weight_kg_value')
+table(ABCDE_T$bm_weight_label_33)
+
+#weight measurement label 
+ABCDE_T$bm_weight_label <- gsub("^[0-9._]+", "", ABCDE_T$'118_5133_bas_mea_current_weight_kg_value')
+table(ABCDE_T$bm_weight_label)
+ABCDE_T$bm_weight_label <- ifelse(ABCDE_T$bm_weight_label == "measured", "1",  ifelse(ABCDE_T$bm_weight_label == "estimated", "2",ABCDE_T$bm_weight_label))
+table(ABCDE_T$bm_weight_label)
+ABCDE_T$bm_weight_label <- as.numeric(ABCDE_T$bm_weight_label)
+
+#"33_5133_bas_mea_current_weight_kg_value"    
+ABCDE_T$bm_weight_kg_33 <- gsub("_measured", "", ABCDE_T$"33_5133_bas_mea_current_weight_kg_value"   )
+ABCDE_T$bm_weight_kg_33<- gsub("_estimated", "",ABCDE_T$bm_weight_kg_33)
+ABCDE_T$bm_weight_kg_33<-gsub("\\.$", "",ABCDE_T$bm_weight_kg_33)
+ABCDE_T$bm_weight_kg_33<-as.numeric(ABCDE_T$bm_weight_kg_33)
+
+ABCDE_T$bm_weight_label_33 <- gsub("^[0-9._]+", "", ABCDE_T$"33_5133_bas_mea_current_weight_kg_value")
+table(ABCDE_T$bm_weight_label_33)
+ABCDE_T$bm_weight_label_33 <- gsub("measured", "1", ABCDE_T$bm_weight_label_33)
+ABCDE_T$bm_weight_label_33 <- as.numeric(ABCDE_T$bm_weight_label_33)
+
+#both vars can be merged 
+sum(!is.na(ABCDE_T$bm_weight_kg) & !is.na(ABCDE_T$bm_weight_kg_33))
+
+#merge vars 
+ABCDE_T$bm_weight_kg <- rowSums(ABCDE_T[, c("bm_weight_kg_33", "bm_weight_kg")], na.rm = TRUE)
+ABCDE_T$bm_weight_kg_label <- rowSums(ABCDE_T[, c("bm_weight_label_33", "bm_weight_label")], na.rm = TRUE)
+ABCDE_T$bm_weight_kg_label_33 <- NULL
+ABCDE_T$bm_weight_kg_33 <- NULL
+
+
+#table(ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_answer_label',  useNA = "always")
+ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_answer_label' <- ifelse(
+  ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_answer_label' == "Child does not feel hot", 
+  0, 
+  ifelse(
+    ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_answer_label' == "Child feels hot", 
+    1,
+    ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_answer_label'
+  )
+)
+
+ABCDE_T$bm_axillary_temp_c_label <- as.numeric(ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_answer_label')
+
+#remove these from the next var as automatically input 36/38 
+ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_value'[ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_answer_label' %in% c(1, 0)] <- NA
+
+#table(ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_value')
+#some have a . at the end, removed via code
+ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_value'<- gsub("\\.$", "", ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_value')
+#change to numeric 
+ABCDE_T$bm_axillary_temp_c <- as.numeric(ABCDE_T$'19_5553_bas_mea_axillary_temperature_°c_value')
+
+
+#table(ABCDE_T$'5_5136_bas_mea_muac_cm_only_if_6_months_or_older_answer_label',  useNA = "always")
+ABCDE_T$'5_5136_bas_mea_muac_cm_only_if_6_months_or_older_answer_label'[ABCDE_T$'5_5136_bas_mea_muac_cm_only_if_6_months_or_older_answer_label' == 'Default value (25)'] <- 1
+ABCDE_T$bm_muac_cm_default<- ABCDE_T$'5_5136_bas_mea_muac_cm_only_if_6_months_or_older_answer_label'
+
+
+#table(ABCDE_T$'5_5136_bas_mea_muac_cm_only_if_6_months_or_older_value')
+#remove default values 
+ABCDE_T$'5_5136_bas_mea_muac_cm_only_if_6_months_or_older_value'[ABCDE_T$'5_5136_bas_mea_muac_cm_only_if_6_months_or_older_answer_label' == 1] <- NA
+ABCDE_T$bm_muac_cm <-ABCDE_T$'5_5136_bas_mea_muac_cm_only_if_6_months_or_older_value'
+ABCDE_T$bm_muac_cm<-as.numeric(ABCDE_T$bm_muac_cm)
+ABCDE_T$bm_muac_cm_default<-as.numeric(ABCDE_T$bm_muac_cm_default)
+
+#table(ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label')
+ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label'[ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label' == 'Not feasible'] <- 1
+ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label'<- as.numeric(ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label')
+
+#table(ABCDE_T$'7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label',  useNA = "always")
+ABCDE_T$'7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label'[ABCDE_T$'7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label' == 'Not feasible'] <- 1
+ABCDE_T$'7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label'<- as.numeric(ABCDE_T$'7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label')
+
+#no of rows where both vars have a value = 0 = merge
+sum(!is.na(ABCDE_T$'7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label') & !is.na(ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label'))
+
+#merge
+ABCDE_T$bm_height_not_feasible <- rowSums(ABCDE_T[, c('7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label', '72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_answer_label')], na.rm = TRUE)
+
+#bm_height_cm
+sum(!is.na(ABCDE_T$'7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_value') & !is.na(ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_value'))
+
+test<- as.numeric(ABCDE_T$'7_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_value')
+
+ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_value' <- as.numeric(ABCDE_T$'72_5140_bas_mea_height_cm_if_length_measured_subtract_0_7cm_value')
+
+ABCDE_T <- ABCDE_T[, !names(ABCDE_T) %in% c("bm_weight_label_33", "bm_weight_label")]
+
+#ABCDE_T[, bm_vars_list] <- NULL
+
+######tabulate the new vars 
+bm_vars_list_new <- grep("bm_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in bm_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+```
+
+-   History - Symptom
+
+```{r}
+
+hx_sym_vars_list_al <- grep("sym_.*_answer_label$", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_sym_vars_list_al) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+#convert to numbers 
+# Define lookup table
+lookup_table <- c(
+  "No" = 0,
+  "Yes" = 1,
+  "Unknown" = 92,
+  "not_available" = 98,
+  "Don't know" = 91,
+  "On time Very early" = 2,
+  "Less than 8" = 1,
+  "8 or more" = 2,
+  "Less than 14 days" = 1,
+  "More or equal than 14 days" = 2,
+  "Feeding well" = 1,
+  "Not feeding at all" = 2,
+  "Not feeding well" = 3,
+  "< 4 days" = 1,
+  ">= 4 days < 7 days" = 2,
+  ">= 7 days < 14 days" = 3,
+  ">= 14 days" = 4,
+  "1.5 to <2.5kg" = 1,
+  ">=2.5kg" = 2,
+  "<32 weeks" = 1,
+  ">= 37 weeks" = 2,
+  "< 14 days" = 2,
+  "< 2 weeks" = 1,
+  ">= 2 weeks" = 2,
+  ">=32 - <37 weeks" = 3,
+  "<3" = 1,
+  ">=3" = 2,
+  ">=4" = 3,
+  ">=5" = 4,
+  ">=6" = 5
+)
+
+for (variable_name in hx_sym_vars_list_al) {
+  ABCDE_T[[variable_name]] <- lookup_table[ABCDE_T[[variable_name]]]
+}
+
+
+hx_sym_vars_list_v <- grep("sym_.*_value$", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_sym_vars_list_v) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+for (variable_name in hx_sym_vars_list_v) {
+  ABCDE_T[[variable_name]][ABCDE_T[[variable_name]] == "not_available"] <- 999
+}
+
+for (variable_name in hx_sym_vars_list_v) {
+  ABCDE_T[[variable_name]] <- gsub("\\.$", "", ABCDE_T[[variable_name]])
+}
+
+for (variable_name in hx_sym_vars_list_v) {
+  ABCDE_T[[variable_name]] <- as.numeric(ABCDE_T[[variable_name]])
+}
+
+#merge 
+ABCDE_T$hx_sym_birth_weight_from_records  <- rowSums(ABCDE_T[, c('139_5520_sym_birth_weight_from_records_answer_label', '45_5520_sym_birth_weight_from_records_answer_label')], na.rm = TRUE)
+
+ABCDE_T$hx_sym_birth_weight_from_records_value  <- rowSums(ABCDE_T[, c('139_5520_sym_birth_weight_from_records_value', '45_5520_sym_birth_weight_from_records_value')], na.rm = TRUE)
+
+ABCDE_T$hx_sym_gestational_age_delivery_from_records  <- rowSums(ABCDE_T[, c("141_5193_sym_gestational_age_delivery_from_records_weeks_answer_label"     , "46_5193_sym_gestational_age_delivery_from_records_weeks_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_gestational_age_delivery_from_records_weeks_value  <- rowSums(ABCDE_T[, c('46_5193_sym_gestational_age_delivery_from_records_weeks_value', '46_5193_sym_gestational_age_delivery_from_records_weeks_value')], na.rm = TRUE)
+
+#new var for the not_available
+# Create a new column and assign NA to it
+ABCDE_T$hx_sym_gestational_age_delivery_from_records_NA <- NA
+# Replace NA values with corresponding values from 'hx_sym_gestational_age_delivery_from_records_weeks_value'
+ABCDE_T$hx_sym_gestational_age_delivery_from_records_NA[ABCDE_T$hx_sym_gestational_age_delivery_from_records_weeks_value == 98] <- ABCDE_T$hx_sym_gestational_age_delivery_from_records_weeks_value[ABCDE_T$hx_sym_gestational_age_delivery_from_records_weeks_value == 98]
+
+
+# Remove the values equal to 98 from the original variable
+ABCDE_T$hx_sym_gestational_age_delivery_from_records_weeks_value <- ABCDE_T$hx_sym_gestational_age_delivery_from_records_weeks_value[ABCDE_T$hx_sym_gestational_age_delivery_from_records_weeks_value != 98]
+
+
+ABCDE_T$hx_sym_infant_receiving_any_breast_milk <- rowSums(ABCDE_T[, c("163_5795_sym_infant_receiving_any_breast_milk_answer_label" ,"56_5795_sym_infant_receiving_any_breast_milk_answer_label" )], na.rm = TRUE)
+
+ABCDE_T$hx_sym_diarrhea_stools_looser_or_more_watery_than_normal   <- rowSums(ABCDE_T[, c('173_5404_sym_diarrhea_stools_looser_or_more_watery_than_normal_answer_label', '61_5404_sym_diarrhea_stools_looser_or_more_watery_than_normal_answer_label')], na.rm = TRUE)
+
+ABCDE_T$hx_sym_yellow_appearing_skin_or_eyes_jaundice <- rowSums(ABCDE_T[, c('175_5385_sym_yellow_appearing_skin_or_eyes_jaundice_answer_label', "64_5385_sym_yellow_appearing_skin_or_eyes_jaundice_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_cheek_swelling <- rowSums(ABCDE_T[, c("176_5668_sym_cheek_swelling_answer_label","282_5668_sym_cheek_swelling_answer_label" )], na.rm = TRUE)
+
+ABCDE_T$hx_sym_ear_problem <- rowSums(ABCDE_T[, c("179_5768_sym_ear_problem_answer_label", "286_5768_sym_ear_problem_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_cough <- rowSums(ABCDE_T[, c("184_5543_sym_cough_answer_label", "292_5543_sym_cough_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_difficulty_breathing <- rowSums(ABCDE_T[, c("189_5544_sym_difficulty_breathing_answer_label", "298_5544_sym_difficulty_breathing_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_duration_diarrhea_days_value <- rowSums(ABCDE_T[, c("206_5612_sym_duration_diarrhea_days_value", "97_5612_sym_duration_diarrhea_days_value")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_duration_diarrhea_days <- rowSums(ABCDE_T[, c("206_5612_sym_duration_diarrhea_days_answer_label", "97_5612_sym_duration_diarrhea_days_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_loose_or_liquid_stools_diarrhea <- rowSums(ABCDE_T[, c("225_5402_sym_loose_or_liquid_stools_diarrhea_answer_label", "335_5402_sym_loose_or_liquid_stools_diarrhea_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_number_loose_or_liquid_stools_over_past_24_hours <- rowSums(ABCDE_T[, c("227_5606_sym_number_loose_or_liquid_stools_over_past_24_hours_answer_label", "337_5606_sym_number_loose_or_liquid_stools_over_past_24_hours_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_number_loose_or_liquid_stools_over_past_24_hours_value <- rowSums(ABCDE_T[, c("227_5606_sym_number_loose_or_liquid_stools_over_past_24_hours_value", "337_5606_sym_number_loose_or_liquid_stools_over_past_24_hours_value")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_ear_problem_pain_discharge_foreign_object <- rowSums(ABCDE_T[, c("242_6108_sym_ear_problem_pain_discharge_foreign_object_answer_label", "353_6108_sym_ear_problem_pain_discharge_foreign_object_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_ear_discharge <- rowSums(ABCDE_T[, c("244_6104_sym_ear_discharge_answer_label", "355_6104_sym_ear_discharge_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_ear_pain <- rowSums(ABCDE_T[, c("245_5570_sym_ear_pain_answer_label", "357_5570_sym_ear_pain_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_vomiting <- rowSums(ABCDE_T[, c("249_5601_sym_vomiting_answer_label", "361_5601_sym_vomiting_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_blood_stool <- rowSums(ABCDE_T[, c("253_5610_sym_blood_stool_answer_label", "365_5610_sym_blood_stool_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_times_child_vomit_past_24_hours <- rowSums(ABCDE_T[, c("255_5607_sym_times_child_vomit_past_24_hours_answer_label", "367_5607_sym_times_child_vomit_past_24_hours_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_abdominal_pain <- rowSums(ABCDE_T[, c("257_5578_sym_abdominal_pain_answer_label", "369_5578_sym_abdominal_pain_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_suspicion_severe_gastrointestinal_bleeding_excessive_blood_stool_or_vomit <- rowSums(ABCDE_T[, c("261_5673_sym_suspicion_severe_gastrointestinal_bleeding_excessive_blood_stool_or_vomit_answer_label", "373_5673_sym_suspicion_severe_gastrointestinal_bleeding_excessive_blood_stool_or_vomit_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_bilious_green_vomit <- rowSums(ABCDE_T[, c("262_5603_sym_bilious_green_vomit_answer_label", "375_5603_sym_bilious_green_vomit_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_tooth_pain <- rowSums(ABCDE_T[, c("266_5569_sym_tooth_pain_answer_label", "378_5569_sym_tooth_pain_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_sore_throat <- rowSums(ABCDE_T[, c("268_5515_sym_sore_throat_answer_label", "379_5515_sym_sore_throat_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_mouth_or_teeth_problem <- rowSums(ABCDE_T[, c("270_5394_sym_mouth_or_teeth_problem_answer_label", "381_5394_sym_mouth_or_teeth_problem_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_runny_or_blocked_nose <- rowSums(ABCDE_T[, c("277_5579_sym_runny_or_blocked_nose_answer_label", "389_5579_sym_runny_or_blocked_nose_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_eye_pain <- rowSums(ABCDE_T[, c("301_5535_sym_eye_pain_answer_label", "412_5535_sym_eye_pain_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_unable_to_move_extremity <- rowSums(ABCDE_T[, c("305_5604_sym_unable_to_move_extremity_answer_label", "415_5604_sym_unable_to_move_extremity_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_musculo_skeletal_pain_or_swelling_bone_or_joint_pain_swelling <- rowSums(ABCDE_T[, c("309_5738_sym_musculo_skeletal_pain_or_swelling_bone_or_joint_pain_swelling_answer_label", "419_5738_sym_musculo_skeletal_pain_or_swelling_bone_or_joint_pain_swelling_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_wound <- rowSums(ABCDE_T[, c("311_5739_sym_wound_answer_label", "421_5739_sym_wound_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_caregiver_responsible_for_care_child_father_or_other <- rowSums(ABCDE_T[, c("327_7224_sym_caregiver_responsible_for_care_child_father_or_other_answer_label", "440_7224_sym_caregiver_responsible_for_care_child_father_or_other_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_accompanied_by_mother <- rowSums(ABCDE_T[, c("332_10507_sym_accompanied_by_mother_answer_label", "446_10507_sym_accompanied_by_mother_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_loss_vision <- rowSums(ABCDE_T[, c("340_5810_sym_loss_vision_answer_label", "455_5810_sym_loss_vision_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_severe_eye_pain <- rowSums(ABCDE_T[, c("348_6103_sym_severe_eye_pain_answer_label", "462_6103_sym_severe_eye_pain_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_duration_red_eye <- rowSums(ABCDE_T[, c("350_5480_sym_duration_red_eye_answer_label", "464_5480_sym_duration_red_eye_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_head_trauma <- rowSums(ABCDE_T[, c("397_5600_sym_head_trauma_answer_label", "510_5600_sym_head_trauma_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_anal_itching <- rowSums(ABCDE_T[, c("409_5211_sym_anal_itching_answer_label", "523_5211_sym_anal_itching_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_suspicion_foreign_body_ear <- rowSums(ABCDE_T[, c("590_5572_sym_suspicion_foreign_body_ear_answer_label", "703_5572_sym_suspicion_foreign_body_ear_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_burn_injury <- rowSums(ABCDE_T[, c("602_5618_sym_burn_injury_answer_label", "714_5618_sym_burn_injury_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_duration_ear_discharge <- rowSums(ABCDE_T[, c("668_5519_sym_duration_ear_discharge_answer_label", "777_5519_sym_duration_ear_discharge_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_duration_ear_discharge_value <- rowSums(ABCDE_T[, c("668_5519_sym_duration_ear_discharge_value", "777_5519_sym_duration_ear_discharge_value")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_pain_or_swelling_genitals <- rowSums(ABCDE_T[, c("676_5741_sym_pain_or_swelling_genitals_answer_label"  , "785_5741_sym_pain_or_swelling_genitals_answer_label" )], na.rm = TRUE)
+
+ABCDE_T$hx_sym_mouth_pain <- rowSums(ABCDE_T[, c("694_5573_sym_mouth_pain_answer_label", "802_5573_sym_mouth_pain_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_constipation_less_frequent_and_hard_stools <- rowSums(ABCDE_T[, c("798_5609_sym_constipation_less_frequent_and_hard_stools_answer_label", "871_5609_sym_constipation_less_frequent_and_hard_stools_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_duration_joint_pain_or_limp <- rowSums(ABCDE_T[, c("803_5157_sym_duration_joint_pain_or_limp_answer_label", "873_5157_sym_duration_joint_pain_or_limp_answer_label")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_duration_joint_pain_or_limp_value <- rowSums(ABCDE_T[, c("803_5157_sym_duration_joint_pain_or_limp_value", "873_5157_sym_duration_joint_pain_or_limp_value")], na.rm = TRUE)
+
+ABCDE_T$hx_sym_return_visit_for_dysentery_after_3_days_treatment_with_ciprofloxacin <- rowSums(ABCDE_T[, c("809_5834_sym_return_visit_for_dysentery_after_3_days_treatment_with_ciprofloxacin_answer_label", "876_5834_sym_return_visit_for_dysentery_after_3_days_treatment_with_ciprofloxacin_answer_label")], na.rm = TRUE)
+
+#drop all merged vars
+
+ABCDE_T <- ABCDE_T[, !names(ABCDE_T) %in% c("803_5157_sym_duration_joint_pain_or_limp_answer_label", "873_5157_sym_duration_joint_pain_or_limp_answer_label","803_5157_sym_duration_joint_pain_or_limp_value", "873_5157_sym_duration_joint_pain_or_limp_value","809_5834_sym_return_visit_for_dysentery_after_3_days_treatment_with_ciprofloxacin_answer_label", "876_5834_sym_return_visit_for_dysentery_after_3_days_treatment_with_ciprofloxacin_answer_label",
+  '139_5520_sym_birth_weight_from_records_answer_label',
+'45_5520_sym_birth_weight_from_records_answer_label',
+'139_5520_sym_birth_weight_from_records_value',
+'45_5520_sym_birth_weight_from_records_value',
+"141_5193_sym_gestational_age_delivery_from_records_weeks_answer_label",
+"46_5193_sym_gestational_age_delivery_from_records_weeks_answer_label",
+'46_5193_sym_gestational_age_delivery_from_records_weeks_value',
+'163_5795_sym_infant_receiving_any_breast_milk_answer_label',
+'56_5795_sym_infant_receiving_any_breast_milk_answer_label',
+'173_5404_sym_diarrhea_stools_looser_or_more_watery_than_normal_answer_label',
+'61_5404_sym_diarrhea_stools_looser_or_more_watery_than_normal_answer_label',
+'175_5385_sym_yellow_appearing_skin_or_eyes_jaundice_answer_label',
+"64_5385_sym_yellow_appearing_skin_or_eyes_jaundice_answer_label",
+"176_5668_sym_cheek_swelling_answer_label",
+"282_5668_sym_cheek_swelling_answer_label",
+"179_5768_sym_ear_problem_answer_label",
+"286_5768_sym_ear_problem_answer_label",
+"184_5543_sym_cough_answer_label",
+"292_5543_sym_cough_answer_label",
+"189_5544_sym_difficulty_breathing_answer_label",
+"298_5544_sym_difficulty_breathing_answer_label",
+"206_5612_sym_duration_diarrhea_days_value",
+"97_5612_sym_duration_diarrhea_days_value",
+"206_5612_sym_duration_diarrhea_days_answer_label",
+"97_5612_sym_duration_diarrhea_days_answer_label",
+"225_5402_sym_loose_or_liquid_stools_diarrhea_answer_label",
+"335_5402_sym_loose_or_liquid_stools_diarrhea_answer_label",
+"227_5606_sym_number_loose_or_liquid_stools_over_past_24_hours_answer_label",
+"337_5606_sym_number_loose_or_liquid_stools_over_past_24_hours_answer_label",
+"227_5606_sym_number_loose_or_liquid_stools_over_past_24_hours_value",
+"337_5606_sym_number_loose_or_liquid_stools_over_past_24_hours_value",
+"242_6108_sym_ear_problem_pain_discharge_foreign_object_answer_label",
+"353_6108_sym_ear_problem_pain_discharge_foreign_object_answer_label",
+"244_6104_sym_ear_discharge_answer_label",
+"355_6104_sym_ear_discharge_answer_label",
+"245_5570_sym_ear_pain_answer_label",
+"357_5570_sym_ear_pain_answer_label",
+"249_5601_sym_vomiting_answer_label",
+"361_5601_sym_vomiting_answer_label",
+"253_5610_sym_blood_stool_answer_label",
+"365_5610_sym_blood_stool_answer_label",
+"255_5607_sym_times_child_vomit_past_24_hours_answer_label",
+"367_5607_sym_times_child_vomit_past_24_hours_answer_label",
+"257_5578_sym_abdominal_pain_answer_label",
+"369_5578_sym_abdominal_pain_answer_label",
+"261_5673_sym_suspicion_severe_gastrointestinal_bleeding_excessive_blood_stool_or_vomit_answer_label",
+"373_5673_sym_suspicion_severe_gastrointestinal_bleeding_excessive_blood_stool_or_vomit_answer_label",
+"262_5603_sym_bilious_green_vomit_answer_label",
+"375_5603_sym_bilious_green_vomit_answer_label",
+"266_5569_sym_tooth_pain_answer_label",
+"378_5569_sym_tooth_pain_answer_label",
+"268_5515_sym_sore_throat_answer_label",
+"379_5515_sym_sore_throat_answer_label",
+"270_5394_sym_mouth_or_teeth_problem_answer_label",
+"381_5394_sym_mouth_or_teeth_problem_answer_label",
+"277_5579_sym_runny_or_blocked_nose_answer_label",
+"389_5579_sym_runny_or_blocked_nose_answer_label",
+"301_5535_sym_eye_pain_answer_label",
+"412_5535_sym_eye_pain_answer_label",
+"305_5604_sym_unable_to_move_extremity_answer_label",
+"415_5604_sym_unable_to_move_extremity_answer_label",
+"309_5738_sym_musculo_skeletal_pain_or_swelling_bone_or_joint_pain_swelling_answer_label",
+"419_5738_sym_musculo_skeletal_pain_or_swelling_bone_or_joint_pain_swelling_answer_label",
+"311_5739_sym_wound_answer_label",
+"421_5739_sym_wound_answer_label",
+"327_7224_sym_caregiver_responsible_for_care_child_father_or_other_answer_label",
+"440_7224_sym_caregiver_responsible_for_care_child_father_or_other_answer_label",
+"332_10507_sym_accompanied_by_mother_answer_label",
+"446_10507_sym_accompanied_by_mother_answer_label",
+"340_5810_sym_loss_vision_answer_label",
+"455_5810_sym_loss_vision_answer_label",
+"348_6103_sym_severe_eye_pain_answer_label",
+"462_6103_sym_severe_eye_pain_answer_label",
+"350_5480_sym_duration_red_eye_answer_label",
+"464_5480_sym_duration_red_eye_answer_label",
+"397_5600_sym_head_trauma_answer_label",
+"510_5600_sym_head_trauma_answer_label",
+"409_5211_sym_anal_itching_answer_label",
+"523_5211_sym_anal_itching_answer_label",
+"590_5572_sym_suspicion_foreign_body_ear_answer_label",
+"703_5572_sym_suspicion_foreign_body_ear_answer_label",
+"602_5618_sym_burn_injury_answer_label",
+"714_5618_sym_burn_injury_answer_label",
+"668_5519_sym_duration_ear_discharge_answer_label",
+"777_5519_sym_duration_ear_discharge_answer_label",
+"668_5519_sym_duration_ear_discharge_value",
+"777_5519_sym_duration_ear_discharge_value",
+"676_5741_sym_pain_or_swelling_genitals_answer_label",
+"785_5741_sym_pain_or_swelling_genitals_answer_label",
+"694_5573_sym_mouth_pain_answer_label",
+"802_5573_sym_mouth_pain_answer_label",
+"798_5609_sym_constipation_less_frequent_and_hard_stools_answer_label",
+"871_5609_sym_constipation_less_frequent_and_hard_stools_answer_label"
+)]
+
+
+#change the names of the vars in the ABCDE_T df 
+col_names <- names(ABCDE_T)
+
+for (i in seq_along(col_names)) {
+    col_names[i] <- sub(".*_sym_", "hx_sy_", col_names[i])
+    if (grepl("hx_sy_", col_names[i])) {
+        col_names[i] <- sub("_answer_label$", "", col_names[i])
+    }
+}
+
+#names back to ABCDE_T
+names(ABCDE_T) <- col_names
+
+hx_sym_vars_list <- grep("_sym_", names(ABCDE_T), value = TRUE)
+
+#ABCDE_T[, hx_sym_vars_list] <- NULL
+
+
+###tabulation of new vars 
+hx_sym_vars_list_new <- grep("hx_sy_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_sym_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+
+```
+
+-   History - Observed Physical
+
+```{r}
+
+hx_os_vars_list <- grep("obs_phy", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_os_vars_list) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+# Define a lookup table for conversion
+lookup_table_hos <- c(
+  "No" = 0,
+  "Yes" = 1,
+  "Completely unable to drink" = 1,
+  "Drinks eagerly, thirstily" = 2,
+  "Drinks normally" = 3,
+  "Drinks poorly" = 4,
+  "Unable to perform test" = 5,
+  "Vomits immediately / everything" = 6
+)
+
+# Convert all variables with "Yes/No" to 1/0 using lookup table
+for (variable_name in hx_os_vars_list) {
+  ABCDE_T[[variable_name]] <- lookup_table_hos[ABCDE_T[[variable_name]]]
+}
+
+#convulsing 
+sum(!is.na(ABCDE_T$"193_6083_obs_phy_sig_convulsing_now_answer_label") & !is.na(ABCDE_T$"82_6083_obs_phy_sig_convulsing_now_answer_label"))
+hx_os_conv_num <- c("193_6083_obs_phy_sig_convulsing_now_answer_label", "82_6083_obs_phy_sig_convulsing_now_answer_label")
+ABCDE_T[hx_os_conv_num] <- lapply(ABCDE_T[hx_os_conv_num], as.numeric)
+ABCDE_T$hx_os_convulsing <- rowSums(ABCDE_T[, c("193_6083_obs_phy_sig_convulsing_now_answer_label", "82_6083_obs_phy_sig_convulsing_now_answer_label" )], na.rm = TRUE)
+
+#neck mass
+sum(!is.na(ABCDE_T$"281_5580_obs_phy_sig_neck_mass_lump_answer_label") & !is.na(ABCDE_T$"393_5580_obs_phy_sig_neck_mass_lump_answer_label"))
+hx_os_neck_num <- c("281_5580_obs_phy_sig_neck_mass_lump_answer_label", "393_5580_obs_phy_sig_neck_mass_lump_answer_label")
+ABCDE_T[hx_os_neck_num] <- lapply(ABCDE_T[hx_os_neck_num], as.numeric)
+ABCDE_T$hx_os_neck_mass <- rowSums(ABCDE_T[, c("281_5580_obs_phy_sig_neck_mass_lump_answer_label", "393_5580_obs_phy_sig_neck_mass_lump_answer_label")], na.rm = TRUE)
+
+#limp
+sum(!is.na(ABCDE_T$"307_5529_obs_phy_sig_limping_answer_label") & !is.na(ABCDE_T$"417_5529_obs_phy_sig_limping_answer_label"))
+hx_os_limp_num <- c("307_5529_obs_phy_sig_limping_answer_label", "417_5529_obs_phy_sig_limping_answer_label")
+ABCDE_T[hx_os_limp_num] <- lapply(ABCDE_T[hx_os_limp_num], as.numeric)
+ABCDE_T$hx_os_limp <- rowSums(ABCDE_T[, c("307_5529_obs_phy_sig_limping_answer_label", "417_5529_obs_phy_sig_limping_answer_label")], na.rm = TRUE)
+
+#red eye
+sum(!is.na(ABCDE_T$"346_5552_obs_phy_sig_red_eye_answer_label") & !is.na(ABCDE_T$"460_5552_obs_phy_sig_red_eye_answer_label"))
+hx_os_reye_num <- c("346_5552_obs_phy_sig_red_eye_answer_label", "460_5552_obs_phy_sig_red_eye_answer_label")
+ABCDE_T[hx_os_reye_num] <- lapply(ABCDE_T[hx_os_reye_num], as.numeric)
+ABCDE_T$hx_os_red_eye <- rowSums(ABCDE_T[, c("346_5552_obs_phy_sig_red_eye_answer_label", "460_5552_obs_phy_sig_red_eye_answer_label")], na.rm = TRUE)
+
+#eye pus 
+sum(!is.na(ABCDE_T$"647_5556_obs_phy_sig_sticky_eye_pus_draining_from_eye_answer_label") & !is.na(ABCDE_T$"758_5556_obs_phy_sig_sticky_eye_pus_draining_from_eye_answer_label"))
+hx_os_reye_num <- c("647_5556_obs_phy_sig_sticky_eye_pus_draining_from_eye_answer_label", "758_5556_obs_phy_sig_sticky_eye_pus_draining_from_eye_answer_label")
+ABCDE_T[hx_os_reye_num] <- lapply(ABCDE_T[hx_os_reye_num], as.numeric)
+ABCDE_T$hx_os_eye_pus <- rowSums(ABCDE_T[, c("647_5556_obs_phy_sig_sticky_eye_pus_draining_from_eye_answer_label", "758_5556_obs_phy_sig_sticky_eye_pus_draining_from_eye_answer_label")], na.rm = TRUE)
+
+# Drop variables by subsetting without including them
+ABCDE_T <- ABCDE_T[, !names(ABCDE_T) %in% c("193_6083_obs_phy_sig_convulsing_now_answer_label", "82_6083_obs_phy_sig_convulsing_now_answer_label","281_5580_obs_phy_sig_neck_mass_lump_answer_label", "393_5580_obs_phy_sig_neck_mass_lump_answer_label","307_5529_obs_phy_sig_limping_answer_label", "417_5529_obs_phy_sig_limping_answer_label", "346_5552_obs_phy_sig_red_eye_answer_label", "460_5552_obs_phy_sig_red_eye_answer_label","647_5556_obs_phy_sig_sticky_eye_pus_draining_from_eye_answer_label", "758_5556_obs_phy_sig_sticky_eye_pus_draining_from_eye_answer_label" )]
+
+
+#change the names of the vars in the ABCDE_T df 
+col_names <- names(ABCDE_T)
+
+for (i in seq_along(col_names)) {
+    col_names[i] <- sub(".*_obs_phy_sig_", "hx_os_", col_names[i])
+    if (grepl("hx_os_", col_names[i])) {
+        col_names[i] <- sub("_answer_label$", "", col_names[i])
+    }
+}
+
+#names back to ABCDE_T
+names(ABCDE_T) <- col_names
+
+#ABCDE_T[, hx_os_vars_list] <- NULL
+
+#remove ("a_t_hemoglobin_g_dl_value", )
+
+###tabulation of new vars 
+hx_os_vars_list_new <- grep("hx_os_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_os_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+
+
+```
+
+-   History - Chronic Condition
+
+```{r}
+
+hx_chr_vars_list <- grep("chr_con", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_chr_vars_list) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+#convert all to numeric 
+for(variable_name in hx_chr_vars_list) {
+    ABCDE_T[[variable_name]] <- ifelse(ABCDE_T[[variable_name]] == "No", 0, ifelse(ABCDE_T[[variable_name]] == "Yes", 1,ifelse(ABCDE_T[[variable_name]] == "Unknown", 92, ABCDE_T[[variable_name]])))
+}
+
+#change to numeric 
+for (variable_name in hx_chr_vars_list) {
+  ABCDE_T[[variable_name]] <- as.numeric(ABCDE_T[[variable_name]])
+}
+
+#hx_chr_hiv_status_child
+sum(!is.na(ABCDE_T$"115_5250_chr_con_hiv_status_child_answer_label") & !is.na(ABCDE_T$"220_5250_chr_con_hiv_status_child_answer_label"))
+hx_chr_a <- c("115_5250_chr_con_hiv_status_child_answer_label", "220_5250_chr_con_hiv_status_child_answer_label")
+ABCDE_T$hx_chr_hiv_status_child <- rowSums(ABCDE_T[, hx_chr_a], na.rm = TRUE)
+
+#hx_chr_sickle_cell
+sum(!is.na(ABCDE_T$"219_5327_chr_con_sickle_cell_disease_answer_label" ) & !is.na(ABCDE_T$ "329_5327_chr_con_sickle_cell_disease_answer_label"  ))
+hx_chr_b <- c("219_5327_chr_con_sickle_cell_disease_answer_label" ,  "329_5327_chr_con_sickle_cell_disease_answer_label"  )
+ABCDE_T$hx_chr_sickle_cell <- rowSums(ABCDE_T[, hx_chr_b], na.rm = TRUE)
+
+#hx_chr_all
+sum(!is.na(ABCDE_T$ "221_5174_chr_con_chronic_conditions_cerebral_palsy_sickle_cell_disease_congenital_heart_disease_answer_label") & !is.na(ABCDE_T$"331_5174_chr_con_chronic_conditions_cerebral_palsy_sickle_cell_disease_congenital_heart_disease_answer_label"))
+hx_chr_c <- c( "221_5174_chr_con_chronic_conditions_cerebral_palsy_sickle_cell_disease_congenital_heart_disease_answer_label", "331_5174_chr_con_chronic_conditions_cerebral_palsy_sickle_cell_disease_congenital_heart_disease_answer_label")
+ABCDE_T$hx_chr_all <- rowSums(ABCDE_T[, hx_chr_c], na.rm = TRUE)
+
+#hx_chr_cong_heart_dis
+sum(!is.na(ABCDE_T$"239_5320_chr_con_congenital_heart_disease_answer_label"   ) & !is.na(ABCDE_T$"349_5320_chr_con_congenital_heart_disease_answer_label" ))
+hx_chr_d <- c("239_5320_chr_con_congenital_heart_disease_answer_label"   , "349_5320_chr_con_congenital_heart_disease_answer_label" )
+ABCDE_T$hx_chr_cong_heart_dis <- rowSums(ABCDE_T[, hx_chr_d], na.rm = TRUE)
+
+#hx_exp_cerebral_palsy
+sum(!is.na(ABCDE_T$"240_5562_chr_con_cerebral_palsy_answer_label" ) & !is.na(ABCDE_T$"351_5562_chr_con_cerebral_palsy_answer_label" ))
+hx_chr_e <- c("240_5562_chr_con_cerebral_palsy_answer_label" , "351_5562_chr_con_cerebral_palsy_answer_label" )
+ABCDE_T$hx_chr_cerebral_palsy <- rowSums(ABCDE_T[, hx_chr_e], na.rm = TRUE)
+
+#drop old vars 
+#ABCDE_T[, hx_chr_vars_list] <- NULL
+
+######tabulate the new vars 
+hx_chr_vars_list_new<-grep("hx_chr_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_chr_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+```
+
+-   History - Exposure
+
+```{r}
+hx_exp_vars_list <- grep("_exp_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_exp_vars_list) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+#convert all to numbers 
+for(variable_name in hx_exp_vars_list) {
+    ABCDE_T[[variable_name]] <- ifelse(ABCDE_T[[variable_name]] == "No", 0, ifelse(ABCDE_T[[variable_name]] == "Yes", 1, ifelse(ABCDE_T[[variable_name]] == "Unknown", 92, ifelse(ABCDE_T[[variable_name]] == "Negative", 0, ifelse(ABCDE_T[[variable_name]] == "Positive",1, ifelse(ABCDE_T[[variable_name]] == "Refuse", 2, ifelse(ABCDE_T[[variable_name]] == "Don't know", 91, ifelse(ABCDE_T[[variable_name]] == "< 1 meter", 1, ifelse(ABCDE_T[[variable_name]] == ">= 1 meter < 1.5 meters", 2, ifelse(ABCDE_T[[variable_name]] == ">= 1.5 meters", 3, ABCDE_T[[variable_name]]))))))))))
+}
+
+ABCDE_T$hx_exp_hiv <- as.numeric(ABCDE_T$"300 6502 HIV exposed")
+ABCDE_T$hx_exp_teach_mother_express_breastmilk <-as.numeric(ABCDE_T$"332 5249 Teach the mother how to express breastmilk (IMCI)")
+ABCDE_T$hx_exp_hiv_counselling_testing <- as.numeric(ABCDE_T$ "692 6506 HIV exposure counselling & testing")
+ABCDE_T$hx_exp_mother_hiv_status <- as.numeric(ABCDE_T$"149_5705_exp_hiv_status_biologic_mother_answer_label")
+ABCDE_T$hx_exp_child_previous_hiv_test <- as.numeric(ABCDE_T$ "153_6514_exp_child_had_previous_hiv_test_answer_label")
+ABCDE_T$hx_exp_accidental_ingestion_potentially_harmful <- as.numeric(ABCDE_T$"643_5633_exp_accidental_ingestion_potentially_harmful_entity_answer_label")              
+ABCDE_T$hx_exp_major_trauma <- as.numeric(ABCDE_T$"660_6106_exp_major_trauma_car_accident_suspicion_multiple_fractures_major_bleeding_answer_label")
+ABCDE_T$hx_exp_fall <- as.numeric(ABCDE_T$"661_5619_exp_height_fall_metres_answer_label") 
+ABCDE_T$hx_exp_height_fall_m <- as.numeric(ABCDE_T$"661_5619_exp_height_fall_metres_value")
+ABCDE_T$hx_exp_head_struck <- as.numeric(ABCDE_T$"664_5620_exp_head_struck_by_high_impact_object_answer_label") 
+
+#hx_exp_recent_tb_close_contact
+sum(!is.na(ABCDE_T$"251_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label") & !is.na(ABCDE_T$"363_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label"))
+hx_exp_a <- c("251_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label", "363_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label")
+ABCDE_T$"251_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label" <- as.numeric(ABCDE_T$"251_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label")
+ABCDE_T$"363_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label"<- as.numeric(ABCDE_T$"363_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label")
+ABCDE_T$hx_exp_recent_tb_close_contact <- rowSums(ABCDE_T[, c("251_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label", "363_5546_exp_recent_close_contact_with_somebody_with_tb_answer_label")], na.rm = TRUE)
+
+#hx_exp_significant_fire_smoke 
+sum(!is.na(ABCDE_T$"303_5630_exp_significant_exposure_to_fire_or_smoke_answer_label") & !is.na(ABCDE_T$"413_5630_exp_significant_exposure_to_fire_or_smoke_answer_label"))
+ABCDE_T$"303_5630_exp_significant_exposure_to_fire_or_smoke_answer_label" <- as.numeric(ABCDE_T$"303_5630_exp_significant_exposure_to_fire_or_smoke_answer_label")
+ABCDE_T$"413_5630_exp_significant_exposure_to_fire_or_smoke_answer_label"<- as.numeric(ABCDE_T$"413_5630_exp_significant_exposure_to_fire_or_smoke_answer_label")
+ABCDE_T$hx_exp_significant_fire_smoke <- rowSums(ABCDE_T[, c("303_5630_exp_significant_exposure_to_fire_or_smoke_answer_label", "413_5630_exp_significant_exposure_to_fire_or_smoke_answer_label")], na.rm = TRUE)
+
+#hx_exp_hiv_test_mother_consent 
+sum(!is.na(ABCDE_T$"320_7221_exp_consent_to_test_mother_for_hiv_today_answer_label") & !is.na(ABCDE_T$"432_7221_exp_consent_to_test_mother_for_hiv_today_answer_label"))
+hx_exp_c <- c("320_7221_exp_consent_to_test_mother_for_hiv_today_answer_label", "432_7221_exp_consent_to_test_mother_for_hiv_today_answer_label")
+ABCDE_T$"320_7221_exp_consent_to_test_mother_for_hiv_today_answer_label" <- as.numeric(ABCDE_T$"320_7221_exp_consent_to_test_mother_for_hiv_today_answer_label")
+ABCDE_T$"432_7221_exp_consent_to_test_mother_for_hiv_today_answer_label"<- as.numeric(ABCDE_T$"432_7221_exp_consent_to_test_mother_for_hiv_today_answer_label")
+ABCDE_T$hx_exp_hiv_test_mother_consent <- rowSums(ABCDE_T[, c("320_7221_exp_consent_to_test_mother_for_hiv_today_answer_label", "432_7221_exp_consent_to_test_mother_for_hiv_today_answer_label")], na.rm = TRUE)
+
+#hx_exp_hiv_test_child_consent
+sum(!is.na(ABCDE_T$"324_7265_exp_consent_to_test_child_for_hiv_today_answer_label") & !is.na(ABCDE_T$"436_7265_exp_consent_to_test_child_for_hiv_today_answer_label"))
+hx_exp_d <- c("324_7265_exp_consent_to_test_child_for_hiv_today_answer_label", "436_7265_exp_consent_to_test_child_for_hiv_today_answer_label")
+ABCDE_T$"324_7265_exp_consent_to_test_child_for_hiv_today_answer_label"<- as.numeric(ABCDE_T$"324_7265_exp_consent_to_test_child_for_hiv_today_answer_label")
+ABCDE_T$"436_7265_exp_consent_to_test_child_for_hiv_today_answer_label"<- as.numeric(ABCDE_T$"436_7265_exp_consent_to_test_child_for_hiv_today_answer_label")
+ABCDE_T$hx_exp_hiv_test_child_consent<- rowSums(ABCDE_T[, c("324_7265_exp_consent_to_test_child_for_hiv_today_answer_label", "436_7265_exp_consent_to_test_child_for_hiv_today_answer_label")], na.rm = TRUE)
+
+#ABCDE_T[, hx_exp_vars_list] <- NULL
+
+######tabulate the new vars 
+hx_exp_vars_list_new<-grep("hx_exp_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in hx_exp_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+```
+
+-   Unique Triage Questions
+
+```{r}
+uni_tri_que_vars_list <- grep("uni_tri_que", names(ABCDE_T), value = TRUE)
+
+for (variable_name in uni_tri_que_vars_list) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+sum(!is.na(ABCDE_T$ "2_10460_uni_tri_que_life_threatening_emergency_obstructed_or_absent_breathing_severe_respiratory_distress_anaphylaxis_shock_coma_convulsion_major_trauma_major_burns_answer_label") & !is.na(ABCDE_T$"63_10460_uni_tri_que_life_threatening_emergency_obstructed_or_absent_breathing_severe_respiratory_distress_anaphylaxis_shock_coma_convulsion_major_trauma_major_burns_answer_label"))
+
+for(variable_name in uni_tri_que_vars_list) {
+    ABCDE_T[[variable_name]] <- ifelse(ABCDE_T[[variable_name]] == "No", 0, ifelse(ABCDE_T[[variable_name]] == "Yes", 1, ABCDE_T[[variable_name]]))
+}
+
+ABCDE_T$"2_10460_uni_tri_que_life_threatening_emergency_obstructed_or_absent_breathing_severe_respiratory_distress_anaphylaxis_shock_coma_convulsion_major_trauma_major_burns_answer_label" <- as.numeric(ABCDE_T$"2_10460_uni_tri_que_life_threatening_emergency_obstructed_or_absent_breathing_severe_respiratory_distress_anaphylaxis_shock_coma_convulsion_major_trauma_major_burns_answer_label")
+
+ABCDE_T$"63_10460_uni_tri_que_life_threatening_emergency_obstructed_or_absent_breathing_severe_respiratory_distress_anaphylaxis_shock_coma_convulsion_major_trauma_major_burns_answer_label" <- as.numeric(ABCDE_T$"63_10460_uni_tri_que_life_threatening_emergency_obstructed_or_absent_breathing_severe_respiratory_distress_anaphylaxis_shock_coma_convulsion_major_trauma_major_burns_answer_label")
+
+ABCDE_T$utq_emergency <- rowSums(ABCDE_T[, c("63_10460_uni_tri_que_life_threatening_emergency_obstructed_or_absent_breathing_severe_respiratory_distress_anaphylaxis_shock_coma_convulsion_major_trauma_major_burns_answer_label", "2_10460_uni_tri_que_life_threatening_emergency_obstructed_or_absent_breathing_severe_respiratory_distress_anaphylaxis_shock_coma_convulsion_major_trauma_major_burns_answer_label")], na.rm = TRUE)
+
+ABCDE_T[, uni_tri_que_vars_list] <- NULL
+
+######tabulate the new vars 
+utq_vars_list_new<-grep("utq_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in utq_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+```
+
+-   Physical Exam
+
+```{r}
+
+phy_exa_vars_list_al <- grep("phy_exa.*_answer_label$", names(ABCDE_T), value = TRUE)
+
+for (variable_name in phy_exa_vars_list_al) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+# Define a lookup table
+lookup_table_pe <- c(
+  "No" = 0,
+  "Yes" = 1,
+  "Unknown" = 92,
+  "Absent" = 0,
+  "Present" = 1,
+  "<90%" = 1,
+  ">/=95%" = 2,
+  "90-92%" = 3,
+  "92-94%" = 4,
+  "94-95%" = 5,
+  "Not feasible" = 97,
+  "Unable to ascertain" = 96,
+  "Movement only when stimulated" = 1,
+  "Movement without stimulation" = 2,
+  "No movement even when stimulated" = 2,
+  "Visibly normal" = 0,
+  "Visibly fast" = 1,
+  "<20" = 1,
+  "20-30" = 2,
+  "30-40" = 3,
+  "40-50" = 4,
+  "50-60" = 5,
+  ">/=60" = 6,
+  "< 5 cm" = 1,
+  ">= 5" = 2,
+  "Face" = 1,
+  "Other" = 95,
+  "Normal" = 0,
+  "Swollen" = 1,
+  "Feet" = 2,
+  "Genital area" = 3,
+  "Hands other than palms" = 4,
+  "Major joint" = 5,
+  "< 5% of total body surface area (1% = hand palm)" = 1,
+  ">= 5 % of total body surface area" = 2,
+  "Skin pinch goes back slowly (1-2 sec)" = 1,
+  "Skin pinch goes back very slowly (>2 sec)" = 2,
+  "not_available" = 999
+)
+
+# Apply lookup table to replace values
+for (variable_name in phy_exa_vars_list_al) {
+  ABCDE_T[[variable_name]] <- lookup_table_pe[ABCDE_T[[variable_name]]]
+}
+
+phy_exa_vars_list_v <- grep("phy_exa.*_value$", names(ABCDE_T), value = TRUE)
+
+for (variable_name in phy_exa_vars_list_v) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+for (variable_name in phy_exa_vars_list_v) {
+  ABCDE_T[[variable_name]][ABCDE_T[[variable_name]] == "not_available"] <- 999
+}
+
+for (variable_name in phy_exa_vars_list_v) {
+  ABCDE_T[[variable_name]] <- gsub("\\.$", "", ABCDE_T[[variable_name]])
+}
+
+for (variable_name in phy_exa_vars_list_v) {
+  ABCDE_T[[variable_name]] <- as.numeric(ABCDE_T[[variable_name]])
+}
+
+#change the names of the vars in the ABCDE_T df 
+col_names <- names(ABCDE_T)
+
+for (i in seq_along(col_names)) {
+    col_names[i] <- sub(".*exa_", "pe_", col_names[i])
+    if (grepl("a_t_", col_names[i])) {
+        col_names[i] <- sub("_answer_label$", "", col_names[i])
+    }
+}
+
+#names back to ABCDE_T
+names(ABCDE_T) <- col_names
+
+ABCDE_T[, phy_exa_vars_list_al] <- NULL
+ABCDE_T[, phy_exa_vars_list_v] <- NULL
+
+###tabulation of new vars 
+phy_exa_vars_list_new <- grep("^pe_", names(ABCDE_T), value = TRUE)
+
+for (variable_name in phy_exa_vars_list_new) {
+     cat("Variable:", variable_name, "\n")
+     variable_table <- table(ABCDE_T[[variable_name]])
+   print(variable_table)
+     cat("\n")
+}
+
+```
